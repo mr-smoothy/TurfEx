@@ -116,7 +116,7 @@ const TurfDetails = () => {
       <div className="details-hero">
         <div className="container">
           <button className="back-btn" onClick={handleBackToTurfs}>
-            ← Back to Turfs
+            {"\u2190"} Back to Turfs
           </button>
         </div>
       </div>
@@ -143,7 +143,7 @@ const TurfDetails = () => {
                   borderRadius: '12px',
                   fontSize: '80px'
                 }}>
-                  🏟️
+                  {"\uD83C\uDFDF"}
                 </div>
               )}
             </div>
@@ -154,30 +154,30 @@ const TurfDetails = () => {
             <div className="info-header">
               <h1 className="details-title">{turf.name}</h1>
               <div className="info-meta">
-                <span className="rating">⭐ {turf.rating}</span>
+                <span className="rating">{"\u2B50"} {turf.rating}</span>
                 <span className={`status ${turf.available ? 'available' : 'unavailable'}`}>
-                  {turf.available ? '✓ Available' : '✗ Unavailable'}
+                  {turf.available ? '{"\u2713"} Available' : '{"\u2717"} Unavailable'}
                 </span>
               </div>
             </div>
 
             <div className="info-item">
-              <span className="info-icon">📍</span>
+              <span className="info-icon">{"\uD83D\uDCCD"}</span>
               <span className="info-text">{turf.location}</span>
             </div>
 
             <div className="info-item">
-              <span className="info-icon">⚽</span>
+              <span className="info-icon">{"\u26BD"}</span>
               <span className="info-text">{turf.type}</span>
             </div>
 
             <div className="info-item">
-              <span className="info-icon">💰</span>
-              <span className="info-text price-text">৳{turf.price || turf.pricePerHour} per hour</span>
+              <span className="info-icon">$</span>
+              <span className="info-text price-text">${turf.price || turf.pricePerHour} per hour</span>
             </div>
 
             <div className="info-item">
-              <span className="info-icon">🕒</span>
+              <span className="info-icon">{"\uD83D\uDD51"}</span>
               <span className="info-text">
                 {slots.length > 0 ? `${slots.length} slots available` : 'No slots available'}
               </span>
@@ -194,7 +194,7 @@ const TurfDetails = () => {
                 {(turf.features || turf.facilities || []).map(function(feature, index) {
                   return (
                   <div key={index} className="feature-item">
-                    <span className="feature-icon">✓</span>
+                    <span className="feature-icon">{"\u2713"}</span>
                     <span>{feature}</span>
                   </div>
                   );
@@ -236,7 +236,7 @@ const TurfDetails = () => {
                         onClick={function() { handleSlotSelect(slot); }}
                       >
                         {slot.startTime} - {slot.endTime}
-                        {slot.price && <span style={{ display: 'block', fontSize: '0.85em' }}>৳{slot.price}</span>}
+                        {slot.price && <span style={{ display: 'block', fontSize: '0.85em' }}>${slot.price}</span>}
                       </button>
                     );
                   }) : (
@@ -264,7 +264,7 @@ const TurfDetails = () => {
                 </div>
                 <div className="summary-item total">
                   <span>Total:</span>
-                  <span>৳{selectedSlot.price || turf.pricePerHour}</span>
+                  <span>${selectedSlot.price || turf.pricePerHour}</span>
                 </div>
               </div>
             )}

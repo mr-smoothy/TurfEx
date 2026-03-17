@@ -14,6 +14,8 @@ const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [role, setRole] = useState('USER');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -29,7 +31,7 @@ const Register = () => {
 
     setLoading(true);
     try {
-      const data = await register(name, email, password, role);
+      const data = await register(name, email, password, phone, address, role);
       // Redirect owners to their dashboard, regular users to turf listing
       if (data.role && data.role.toUpperCase() === 'OWNER') {
         navigate('/my-turfs');
@@ -48,6 +50,8 @@ const Register = () => {
   function handleEmailChange(event) { setEmail(event.target.value); }
   function handlePasswordChange(event) { setPassword(event.target.value); }
   function handleConfirmPasswordChange(event) { setConfirmPassword(event.target.value); }
+  function handlePhoneChange(event) { setPhone(event.target.value); }
+  function handleAddressChange(event) { setAddress(event.target.value); }
   function handleRoleChange(event) { setRole(event.target.value); }
 
   return (
@@ -113,6 +117,30 @@ const Register = () => {
                 placeholder="Confirm your password"
                 required
                 minLength="6"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="phone">Phone Number</label>
+              <input
+                type="tel"
+                id="phone"
+                value={phone}
+                onChange={handlePhoneChange}
+                placeholder="Enter your phone number"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="address">Address</label>
+              <input
+                type="text"
+                id="address"
+                value={address}
+                onChange={handleAddressChange}
+                placeholder="Enter your address"
+                required
               />
             </div>
 

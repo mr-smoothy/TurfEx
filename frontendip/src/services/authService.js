@@ -12,7 +12,15 @@ function saveAuthData(data) {
     id: data.id,
     name: data.name,
     email: data.email,
+    phone: data.phone,
+    address: data.address,
     role: data.role,
+  }));
+  localStorage.setItem('userProfile', JSON.stringify({
+    name: data.name,
+    email: data.email,
+    phone: data.phone || '',
+    address: data.address || ''
   }));
 }
 
@@ -22,8 +30,8 @@ export async function login(email, password) {
   return response.data;
 }
 
-export async function register(name, email, password, role = 'USER') {
-  const response = await api.post('/auth/register', { name, email, password, role });
+export async function register(name, email, password, phone, address, role = 'USER') {
+  const response = await api.post('/auth/register', { name, email, password, phone, address, role });
   saveAuthData(response.data);
   return response.data;
 }
@@ -35,6 +43,7 @@ export function logout() {
   localStorage.removeItem('userName');
   localStorage.removeItem('isLoggedIn');
   localStorage.removeItem('userRole');
+  localStorage.removeItem('userProfile');
 }
 
 export function getCurrentUser() {

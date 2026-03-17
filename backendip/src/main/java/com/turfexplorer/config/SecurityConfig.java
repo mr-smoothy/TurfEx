@@ -62,8 +62,7 @@ public class SecurityConfig {
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/turfs", "/api/turfs/**").permitAll()
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/turfs", "/api/turfs/**").permitAll()                .requestMatchers("/api/chat").permitAll()                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/owner/**").hasAnyRole("OWNER", "ADMIN")
                 .requestMatchers("/api/bookings/**").authenticated()
                 .anyRequest().authenticated()

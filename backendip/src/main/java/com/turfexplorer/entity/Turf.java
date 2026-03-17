@@ -34,7 +34,7 @@ public class Turf {
     @Column(columnDefinition = "TEXT")
     private String description;
     
-    @Column(name = "image_url")
+    @Column(name = "image_url", columnDefinition = "LONGTEXT")
     private String imageUrl;
     
     @Column(name = "owner_id", nullable = false)

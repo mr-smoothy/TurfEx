@@ -10,6 +10,8 @@ CREATE TABLE users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    address VARCHAR(255),
     role ENUM('USER', 'OWNER', 'ADMIN') NOT NULL DEFAULT 'USER',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_email (email)

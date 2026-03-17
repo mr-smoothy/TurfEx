@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/authService';
+import ChatBot from '../ChatBot/ChatBot';
 import './Header.css';
 
 const Header = () => {
@@ -13,6 +14,7 @@ const Header = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);  // User logged in status
   const [userEmail, setUserEmail] = useState('');  // User's email
   const [userRole, setUserRole] = useState('');  // User's role
+  const [chatOpen, setChatOpen] = useState(false); // Chatbot state
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -66,8 +68,9 @@ const Header = () => {
   }
 
   return (
-    <header className="header">
-      <div className="container">
+    <>
+      <header className="header">
+        <div className="container">
         <div className="header-content">
           <Link to="/" className="logo">
             <span className="logo-icon">⚽</span>
@@ -113,6 +116,14 @@ const Header = () => {
               </Link>
             )}
             
+            <button
+              type="button"
+              className="btn btn-primary nav-btn"
+              onClick={(e) => { e.preventDefault(); setChatOpen(!chatOpen); closeMenu(); }}
+            >
+              🤖
+            </button>
+
             {isLoggedIn ? (
               <button onClick={handleLogout} className="btn btn-primary nav-btn">
                 Logout
@@ -136,7 +147,9 @@ const Header = () => {
           </button>
         </div>
       </div>
-    </header>
+      </header>
+      {chatOpen && <ChatBot onClose={() => setChatOpen(false)} />}
+    </>
   );
 };
 

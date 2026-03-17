@@ -6,28 +6,38 @@ const TurfCard = ({ turf }) => {
   return (
     <div className="turf-card">
       <div className="turf-image">
-        {turf.image ? (
-          <img src={turf.image} alt={turf.name} />
-        ) : (
-          <div className="turf-placeholder">
-            <span className="turf-icon">🏟️</span>
-          </div>
-        )}
+        {(turf.image || turf.imageUrl) ? (
+          <img 
+            src={turf.image || turf.imageUrl} 
+            alt={turf.name} 
+            onError={(e) => {
+              e.target.onerror = null; 
+              e.target.style.display = 'none';
+              e.target.nextSibling.style.display = 'flex';
+            }}
+          />
+        ) : null}
+        <div 
+          className="turf-placeholder" 
+          style={{ display: (turf.image || turf.imageUrl) ? 'none' : 'flex' }}
+        >
+          <span className="turf-icon">{"\uD83C\uDFDF"}</span>
+        </div>
       </div>
 
       <div className="turf-info">
         <h3 className="turf-name">{turf.name}</h3>
-        <p className="turf-location">📍 {turf.location}</p>
+        <p className="turf-location">{"\uD83D\uDCCD"} {turf.location}</p>
         
         <div className="turf-meta">
-          <span className="turf-type">⚽ {turf.type}</span>
-          <span className="turf-price">৳{turf.price || turf.pricePerHour}/hr</span>
+          <span className="turf-type">{"\u26BD"} {turf.type}</span>
+          <span className="turf-price">${turf.price || turf.pricePerHour}/hr</span>
         </div>
 
         <div className="turf-stats">
-          <span className="turf-rating">⭐ {turf.rating || 4.5}</span>
+          <span className="turf-rating">{"\u2B50"} {turf.rating || 4.5}</span>
           <span className={`availability ${turf.available ? 'available' : 'unavailable'}`}>
-            {turf.available ? '✓' : '✗'}
+            {turf.available ? '{"\u2713"}' : '{"\u2717"}'}
           </span>
         </div>
 

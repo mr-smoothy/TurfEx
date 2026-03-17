@@ -28,6 +28,12 @@ public class User {
     @Column(nullable = false)
     private String password;
     
+    @Column
+    private String phone;
+    
+    @Column
+    private String address;
+    
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role = Role.USER;

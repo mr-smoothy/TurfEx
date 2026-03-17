@@ -42,6 +42,8 @@ public class AuthService {
         user.setName(request.getName());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPhone(request.getPhone());
+        user.setAddress(request.getAddress());
         // Allow USER or OWNER registration; ADMIN role cannot be self-assigned
         Role assignedRole = (request.getRole() == Role.OWNER) ? Role.OWNER : Role.USER;
         user.setRole(assignedRole);
@@ -56,7 +58,7 @@ public class AuthService {
         SecurityContextHolder.getContext().setAuthentication(authentication);
         String jwt = tokenProvider.generateToken(authentication);
 
-        return new JwtResponse(jwt, user.getId(), user.getName(), user.getEmail(), user.getRole().name());
+        return new JwtResponse(jwt, user.getId(), user.getName(), user.getEmail(), user.getPhone(), user.getAddress(), user.getRole().name());
     }
 
     public JwtResponse login(LoginRequest request) {
@@ -70,6 +72,6 @@ public class AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new BadRequestException("User not found"));
 
-        return new JwtResponse(jwt, user.getId(), user.getName(), user.getEmail(), user.getRole().name());
+        return new JwtResponse(jwt, user.getId(), user.getName(), user.getEmail(), user.getPhone(), user.getAddress(), user.getRole().name());
     }
 }

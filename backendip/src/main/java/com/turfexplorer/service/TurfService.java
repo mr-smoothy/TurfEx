@@ -40,8 +40,9 @@ public class TurfService {
     }
 
     public List<SlotResponse> getTurfSlots(Long turfId) {
-        Turf turf = turfRepository.findById(turfId)
-                .orElseThrow(() -> new ResourceNotFoundException("Turf not found with id: " + turfId));
+if (!turfRepository.existsById(turfId)) {
+    throw new ResourceNotFoundException("Turf not found with id: " + turfId);
+}
         
         return slotRepository.findByTurfId(turfId)
                 .stream()

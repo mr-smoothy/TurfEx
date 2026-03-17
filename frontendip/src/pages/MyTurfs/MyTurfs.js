@@ -143,8 +143,19 @@ const MyTurfs = () => {
                   </div>
 
                   <div className="turf-image-my">
-                    {turf.image ? (
-                      <img src={turf.image} alt={turf.name} />
+                    {(turf.image || turf.imageUrl) ? (
+                      <>
+                        <img 
+                          src={turf.image || turf.imageUrl} 
+                          alt={turf.name} 
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <div className="placeholder-image" style={{ display: 'none' }}><span>🏟️</span></div>
+                      </>
                     ) : (
                       <div className="placeholder-image"><span>🏟️</span></div>
                     )}

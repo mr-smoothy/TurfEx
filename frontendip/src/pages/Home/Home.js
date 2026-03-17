@@ -4,39 +4,7 @@
 
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import TurfCard from '../../components/TurfCard/TurfCard';
 import './Home.css';
-
-// Top rated turfs to display on home page
-const topTurfs = [
-  {
-    id: 'ctg-4',
-    name: "Nasirabad Sports Hub",
-    location: "Nasirabad, Chittagong",
-    type: "Cricket Turf",
-    price: 1800,
-    available: true,
-    rating: 4.9
-  },
-  {
-    id: 'ctg-6',
-    name: "Khulshi Elite Turf",
-    location: "Khulshi, Chittagong",
-    type: "Multi-Sport",
-    price: 2000,
-    available: true,
-    rating: 4.9
-  },
-  {
-    id: 'ctg-1',
-    name: "Agrabad Sports Arena",
-    location: "Agrabad, Chittagong",
-    type: "Cricket & Football",
-    price: 1500,
-    available: true,
-    rating: 4.8
-  }
-];
 
 const Home = () => {
   const navigate = useNavigate();
@@ -162,27 +130,6 @@ const Home = () => {
               <h3>Top Rated</h3>
               <p>All turfs are verified and highly rated</p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="top-turfs">
-        <div className="container">
-          <h2 className="section-title">Popular Turfs</h2>
-          <p className="section-subtitle">
-            Check out the most popular turfs in Chittagong
-          </p>
-
-          <div className="turfs-grid">
-            {topTurfs.map(function(turf) {
-              return <TurfCard key={turf.id} turf={turf} />;
-            })}
-          </div>
-
-          <div className="view-all-section">
-            <Link to="/turfs" className="btn btn-secondary">
-              View All Turfs
-            </Link>
           </div>
         </div>
       </section>

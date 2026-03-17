@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Header from './components/Header/Header';
 import Footer from './components/Footer/Footer';
 import Home from './pages/Home/Home';
@@ -27,7 +27,7 @@ function AdminRoute({ children }) {
 
 function App() {
   return (
-    <Router>
+    
       <div className="App">
         <Header />
         <main className="main-content">
@@ -43,10 +43,12 @@ function App() {
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
             <Route path="/my-bookings" element={<PrivateRoute><MyBookings /></PrivateRoute>} />
           </Routes>
+  
         </main>
         <Footer />
       </div>
-    </Router>
+
+    
   );
 }
 

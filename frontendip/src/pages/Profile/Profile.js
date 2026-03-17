@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../../services/api';
 import './Profile.css';
 
 const Profile = () => {
@@ -33,31 +34,61 @@ const Profile = () => {
       return;
     }
 
-    const savedProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
-    const userName = localStorage.getItem('userName') || '';
+    async function fetchProfile() {
+      try {
+        const response = await api.get('/users/me');
+        const data = response.data;
+        setName(data.name || '');
+        setEmail(data.email || '');
+        setPhone(data.phone || '');
+        setAddress(data.address || '');
+      } catch (err) {
+        console.error('Failed to fetch profile', err);
+        
+        // Fallback to local storage
+        const savedProfile = JSON.parse(localStorage.getItem('userProfile') || '{}');
+        const userObj = JSON.parse(localStorage.getItem('user') || '{}');
+        const userName = localStorage.getItem('userName') || '';
+        
+        setEmail(userEmail);
+        setName(savedProfile.name || userObj.name || userName || '');
+        setPhone(savedProfile.phone || userObj.phone || '');
+        setAddress(savedProfile.address || userObj.address || '');
+      }
+    }
     
-    setEmail(userEmail);
-    setName(savedProfile.name || userName || '');
-    setPhone(savedProfile.phone || '');
-    setAddress(savedProfile.address || '');
+    fetchProfile();
   }, [navigate]);
 
   // Function to save profile changes
-  function handleSave(event) {
+  async function handleSave(event) {
     event.preventDefault();
     
-    const profileData = {
-      name: name,
-      email: email,
-      phone: phone,
-      address: address
-    };
-    
-    localStorage.setItem('userProfile', JSON.stringify(profileData));
-    localStorage.setItem('userName', name);
-    
-    setIsEditing(false);
-    alert('Profile updated successfully!');
+    try {
+      await api.put('/users/me', {
+        name,
+        phone,
+        address
+      });
+      
+      const profileData = {
+        name: name,
+        email: email,
+        phone: phone,
+        address: address
+      };
+      
+      localStorage.setItem('userProfile', JSON.stringify(profileData));
+      localStorage.setItem('userName', name);
+      
+      const userObj = JSON.parse(localStorage.getItem('user') || '{}');
+      localStorage.setItem('user', JSON.stringify({ ...userObj, ...profileData }));
+      
+      setIsEditing(false);
+      alert('Profile updated successfully!');
+    } catch (err) {
+      alert('Failed to update profile. Please try again.');
+    }
   }
 
   // Handler functions for form inputs

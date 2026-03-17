@@ -174,16 +174,31 @@ const AddTurf = () => {
 
           {/* Image Upload */}
           <div className="form-group">
-            <label htmlFor="imageUrl">Turf Image URL (Optional)</label>
+            <label htmlFor="imageFile">Turf Image (Optional)</label>
             <input
-              type="text"
-              id="imageUrl"
-              value={imageUrl}
-              onChange={handleImageUrlChange}
-              placeholder="Paste image URL or upload when backend is ready"
+              type="file"
+              id="imageFile"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    setImageUrl(reader.result);
+                  };
+                  reader.readAsDataURL(file);
+                } else {
+                  setImageUrl('');
+                }
+              }}
             />
+            {imageUrl && (
+              <div style={{ marginTop: '10px' }}>
+                <img src={imageUrl} alt="Preview" style={{ maxWidth: '200px', borderRadius: '8px' }} />
+              </div>
+            )}
             <small style={{ color: '#666', fontSize: '0.85em', display: 'block', marginTop: '5px' }}>
-              💡 Image upload feature will be fully functional when backend is integrated
+              💡 Please upload a clear picture of your turf.
             </small>
           </div>
 
