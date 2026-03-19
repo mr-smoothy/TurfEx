@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMyTurfs, deleteTurf, getTurfBookings } from '../../services/turfService';
+import { getMyTurfs, deleteTurf, getTurfBookings, getOwnerEarningsSummary } from '../../services/turfService';
 import { addSlot, deleteSlot } from '../../services/slotService';
 import './MyTurfs.css';
 
@@ -15,6 +15,7 @@ const MyTurfs = () => {
   const [viewingBookings, setViewingBookings] = useState(null);
   const [selectedTurf, setSelectedTurf] = useState(null);
   const [turfBookings, setTurfBookings] = useState({});
+  const [earningsSummary, setEarningsSummary] = useState({ successfulPayments: 0, totalEarnings: 0 });
   const [loading, setLoading] = useState(true);
 
   // Slot management state
@@ -41,6 +42,13 @@ const MyTurfs = () => {
     try {
       const turfs = await getMyTurfs();
       setMyTurfs(turfs);
+
+      try {
+        const earnings = await getOwnerEarningsSummary();
+        setEarningsSummary(earnings);
+      } catch (e) {
+        setEarningsSummary({ successfulPayments: 0, totalEarnings: 0 });
+      }
 
       // Load bookings for each turf
       const bookingsMap = {};
@@ -119,6 +127,10 @@ const MyTurfs = () => {
         <div className="container">
           <h1>My Turfs</h1>
           <p>View all your submitted turfs</p>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <span className="stat stat-confirmed">💸 Total Earnings: ৳{Number(earningsSummary.totalEarnings || 0).toFixed(2)}</span>
+            <span className="stat stat-pending">✅ Successful Payments: {earningsSummary.successfulPayments || 0}</span>
+          </div>
         </div>
       </div>
 

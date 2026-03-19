@@ -56,6 +56,10 @@ CREATE TABLE bookings (
     slot_id BIGINT NOT NULL,
     booking_date DATE NOT NULL,
     status ENUM('PENDING', 'CONFIRMED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    payment_status ENUM('PENDING', 'SUCCESS', 'PARTIAL', 'FULL', 'FAILED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    total_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    paid_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+    due_amount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (turf_id) REFERENCES turfs(id) ON DELETE CASCADE,
@@ -64,7 +68,39 @@ CREATE TABLE bookings (
     INDEX idx_turf (turf_id),
     INDEX idx_slot (slot_id),
     INDEX idx_status (status),
+    INDEX idx_payment_status (payment_status),
     INDEX idx_booking_date (booking_date)
+);
+
+-- Payments Table
+CREATE TABLE payments (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    turf_id BIGINT NOT NULL,
+    slot_id BIGINT NOT NULL,
+    booking_date DATE NOT NULL,
+    booking_id BIGINT,
+    transaction_id VARCHAR(100) NOT NULL UNIQUE,
+    gateway_transaction_id VARCHAR(100),
+    validation_id VARCHAR(100),
+    amount DECIMAL(10, 2) NOT NULL,
+    total_amount DECIMAL(10, 2),
+    paid_amount DECIMAL(10, 2),
+    is_partial BOOLEAN DEFAULT FALSE,
+    status ENUM('PENDING', 'SUCCESS', 'PARTIAL', 'FULL', 'FAILED', 'CANCELLED') NOT NULL DEFAULT 'PENDING',
+    raw_init_response LONGTEXT,
+    raw_validation_response LONGTEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (turf_id) REFERENCES turfs(id) ON DELETE CASCADE,
+    FOREIGN KEY (slot_id) REFERENCES slots(id) ON DELETE CASCADE,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL,
+    INDEX idx_payment_booking (booking_id),
+    INDEX idx_payment_turf (turf_id),
+    INDEX idx_payment_slot (slot_id),
+    INDEX idx_payment_date (booking_date),
+    INDEX idx_payment_tran (transaction_id),
+    INDEX idx_payment_status (status)
 );
 
 -- Insert Sample Admin User (password: admin123)
@@ -89,3 +125,16 @@ INSERT INTO slots (turf_id, start_time, end_time, price, status) VALUES
 (2, '07:00:00', '10:00:00', 2000.00, 'AVAILABLE'),
 (2, '14:00:00', '17:00:00', 2200.00, 'AVAILABLE'),
 (3, '09:00:00', '11:00:00', 1000.00, 'AVAILABLE');
+
+-- Existing DB migration hints for partial-payment support
+-- ALTER TABLE bookings
+--   MODIFY payment_status ENUM('PENDING','SUCCESS','PARTIAL','FULL','FAILED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+--   ADD COLUMN total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+--   ADD COLUMN paid_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+--   ADD COLUMN due_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00;
+--
+-- ALTER TABLE payments
+--   MODIFY status ENUM('PENDING','SUCCESS','PARTIAL','FULL','FAILED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+--   ADD COLUMN total_amount DECIMAL(10,2) NULL,
+--   ADD COLUMN paid_amount DECIMAL(10,2) NULL,
+--   ADD COLUMN is_partial BOOLEAN DEFAULT FALSE;

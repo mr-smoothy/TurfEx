@@ -12,6 +12,9 @@ import AddTurf from './pages/AddTurf/AddTurf';
 import MyTurfs from './pages/MyTurfs/MyTurfs';
 import Profile from './pages/Profile/Profile';
 import MyBookings from './pages/MyBookings/MyBookings';
+import PaymentSuccess from './pages/PaymentSuccess/PaymentSuccess';
+import PaymentFail from './pages/PaymentFail/PaymentFail';
+import PaymentCancel from './pages/PaymentCancel/PaymentCancel';
 import { isLoggedIn, isAdmin } from './services/authService';
 import './App.css';
 
@@ -42,6 +45,9 @@ function App() {
             <Route path="/my-turfs" element={<PrivateRoute><MyTurfs /></PrivateRoute>} />
             <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
             <Route path="/my-bookings" element={<PrivateRoute><MyBookings /></PrivateRoute>} />
+            <Route path="/payment/success" element={<PaymentSuccess />} />
+            <Route path="/payment/fail" element={<PaymentFail />} />
+            <Route path="/payment/cancel" element={<PaymentCancel />} />
           </Routes>
   
         </main>

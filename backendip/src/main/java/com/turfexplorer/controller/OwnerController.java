@@ -3,6 +3,7 @@ package com.turfexplorer.controller;
 import com.turfexplorer.dto.*;
 import com.turfexplorer.security.UserDetailsServiceImpl;
 import com.turfexplorer.service.OwnerService;
+import com.turfexplorer.service.PaymentService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,9 @@ public class OwnerController {
 
     @Autowired
     private UserDetailsServiceImpl userDetailsService;
+
+    @Autowired
+    private PaymentService paymentService;
 
     @PostMapping("/turfs")
     public ResponseEntity<TurfResponse> submitTurf(
@@ -86,5 +90,11 @@ public class OwnerController {
             Authentication authentication) {
         Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
         return ResponseEntity.ok(ownerService.getTurfStatistics(turfId, userId));
+    }
+
+    @GetMapping("/earnings-summary")
+    public ResponseEntity<OwnerEarningsResponse> getOwnerEarningsSummary(Authentication authentication) {
+        Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
+        return ResponseEntity.ok(paymentService.getOwnerEarningsSummary(userId));
     }
 }

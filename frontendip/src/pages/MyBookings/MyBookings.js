@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMyBookings, cancelBooking } from '../../services/bookingService';
+import { getMyBookings, cancelBooking, initPayment } from '../../services/bookingService';
 import './MyBookings.css';
 
 const MyBookings = () => {
@@ -12,6 +12,7 @@ const MyBookings = () => {
 
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [payingBookingId, setPayingBookingId] = useState(null);
 
   useEffect(function() {
     const userRole = localStorage.getItem('userRole');
@@ -47,6 +48,26 @@ const MyBookings = () => {
       loadUserBookings();
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to cancel booking.');
+    }
+  }
+
+  async function handlePayNow(booking) {
+    if (!booking.bookingDate || !booking.turfId || !booking.slotId || !booking.price) {
+      alert('Payment details are incomplete for this booking. Please book from turf details again.');
+      return;
+    }
+
+    setPayingBookingId(booking.id);
+    try {
+      const payment = await initPayment(booking.turfId, booking.slotId, booking.price, booking.bookingDate);
+      if (!payment.gatewayPageURL) {
+        throw new Error('Missing gateway URL');
+      }
+      window.location.href = payment.gatewayPageURL;
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to start payment. Please try again.');
+    } finally {
+      setPayingBookingId(null);
     }
   }
 
@@ -126,6 +147,38 @@ const MyBookings = () => {
                       {booking.status ? booking.status.charAt(0) + booking.status.slice(1).toLowerCase() : 'Pending'}
                     </span>
                   </div>
+
+                  <div className="detail-item">
+                    <span className="detail-icon">💳</span>
+                    <span className="detail-label">Payment:</span>
+                    <span className="detail-value">
+                      {booking.paymentStatus ? booking.paymentStatus.charAt(0) + booking.paymentStatus.slice(1).toLowerCase() : 'Pending'}
+                    </span>
+                  </div>
+
+                  {booking.totalAmount !== undefined && booking.totalAmount !== null && (
+                    <div className="detail-item">
+                      <span className="detail-icon">🧾</span>
+                      <span className="detail-label">Total:</span>
+                      <span className="detail-value">৳{booking.totalAmount}</span>
+                    </div>
+                  )}
+
+                  {booking.paidAmount !== undefined && booking.paidAmount !== null && (
+                    <div className="detail-item">
+                      <span className="detail-icon">✅</span>
+                      <span className="detail-label">Paid:</span>
+                      <span className="detail-value">৳{booking.paidAmount}</span>
+                    </div>
+                  )}
+
+                  {booking.dueAmount !== undefined && booking.dueAmount !== null && booking.dueAmount > 0 && (
+                    <div className="detail-item">
+                      <span className="detail-icon">⏳</span>
+                      <span className="detail-label">Due:</span>
+                      <span className="detail-value">৳{booking.dueAmount}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -138,6 +191,15 @@ const MyBookings = () => {
                   >
                     View Turf
                   </button>
+                  {booking.paymentStatus !== 'SUCCESS' && booking.paymentStatus !== 'PARTIAL' && booking.paymentStatus !== 'FULL' && booking.status !== 'CANCELLED' && (
+                    <button
+                      onClick={function() { handlePayNow(booking); }}
+                      className="btn btn-primary"
+                      disabled={payingBookingId === booking.id}
+                    >
+                      {payingBookingId === booking.id ? 'Redirecting...' : 'Pay 50% to Confirm'}
+                    </button>
+                  )}
                   <button
                     onClick={function() { handleCancel(booking.id); }}
                     className="btn btn-cancel"

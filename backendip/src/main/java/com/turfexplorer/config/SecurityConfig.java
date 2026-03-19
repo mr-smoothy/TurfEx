@@ -17,7 +17,6 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -26,9 +25,6 @@ public class SecurityConfig {
 
     @Autowired
     private UserDetailsService userDetailsService;
-
-    @Autowired
-    private CorsConfigurationSource corsConfigurationSource;
 
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
@@ -56,15 +52,19 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource))
+            .cors(cors -> cors.disable())
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authenticationProvider(authenticationProvider())
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/turfs", "/api/turfs/**").permitAll()                .requestMatchers("/api/chat").permitAll()                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/turfs", "/api/turfs/**").permitAll()
+                .requestMatchers("/api/chat").permitAll()
+                .requestMatchers("/api/payment/success", "/api/payment/fail", "/api/payment/cancel").permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/owner/**").hasAnyRole("OWNER", "ADMIN")
                 .requestMatchers("/api/bookings/**").authenticated()
+                .requestMatchers("/api/payment/**").authenticated()
                 .anyRequest().authenticated()
             );
 

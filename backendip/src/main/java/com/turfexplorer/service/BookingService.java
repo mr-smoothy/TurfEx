@@ -6,6 +6,7 @@ import com.turfexplorer.entity.Booking;
 import com.turfexplorer.entity.Slot;
 import com.turfexplorer.entity.Turf;
 import com.turfexplorer.enums.BookingStatus;
+import com.turfexplorer.enums.PaymentStatus;
 import com.turfexplorer.enums.SlotStatus;
 import com.turfexplorer.enums.TurfStatus;
 import com.turfexplorer.exception.BadRequestException;
@@ -69,7 +70,8 @@ public class BookingService {
         booking.setTurfId(request.getTurfId());
         booking.setSlotId(request.getSlotId());
         booking.setBookingDate(request.getBookingDate());
-        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setStatus(BookingStatus.PENDING);
+        booking.setPaymentStatus(PaymentStatus.PENDING);
 
         booking = bookingRepository.save(booking);
 
@@ -112,6 +114,10 @@ public class BookingService {
         response.setSlotId(booking.getSlotId());
         response.setBookingDate(booking.getBookingDate());
         response.setStatus(booking.getStatus().name());
+        response.setPaymentStatus(booking.getPaymentStatus().name());
+        response.setTotalAmount(booking.getTotalAmount());
+        response.setPaidAmount(booking.getPaidAmount());
+        response.setDueAmount(booking.getDueAmount());
         response.setCreatedAt(booking.getCreatedAt());
 
         if (turf != null) {

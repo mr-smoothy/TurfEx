@@ -1,0 +1,712 @@
+package com.turfexplorer.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.turfexplorer.dto.BookingRequest;
+import com.turfexplorer.dto.BookingResponse;
+import com.turfexplorer.dto.OwnerEarningsResponse;
+import com.turfexplorer.dto.PaymentCallbackResultResponse;
+import com.turfexplorer.dto.PaymentInitRequest;
+import com.turfexplorer.dto.PaymentInitResponse;
+import com.turfexplorer.entity.Booking;
+import com.turfexplorer.entity.Payment;
+import com.turfexplorer.entity.Slot;
+import com.turfexplorer.entity.Turf;
+import com.turfexplorer.enums.BookingStatus;
+import com.turfexplorer.enums.PaymentStatus;
+import com.turfexplorer.enums.SlotStatus;
+import com.turfexplorer.enums.TurfStatus;
+import com.turfexplorer.exception.BadRequestException;
+import com.turfexplorer.exception.ResourceNotFoundException;
+import com.turfexplorer.repository.BookingRepository;
+import com.turfexplorer.repository.PaymentRepository;
+import com.turfexplorer.repository.SlotRepository;
+import com.turfexplorer.repository.TurfRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.net.URI;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@Service
+public class PaymentService {
+
+    @Autowired
+    private BookingService bookingService;
+
+    @Autowired
+    private BookingRepository bookingRepository;
+
+    @Autowired
+    private TurfRepository turfRepository;
+
+    @Autowired
+    private SlotRepository slotRepository;
+
+    @Autowired
+    private PaymentRepository paymentRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Value("${ssl.base.url}")
+    private String sslBaseUrl;
+
+    @Value("${ssl.store.id}")
+    private String storeId;
+
+    @Value("${ssl.store.password}")
+    private String storePassword;
+
+    @Value("${ssl.success.url}")
+    private String successUrl;
+
+    @Value("${ssl.fail.url}")
+    private String failUrl;
+
+    @Value("${ssl.cancel.url}")
+    private String cancelUrl;
+
+    @Value("${ssl.frontend.success.url}")
+    private String frontendSuccessUrl;
+
+    @Value("${ssl.frontend.fail.url}")
+    private String frontendFailUrl;
+
+    @Value("${ssl.frontend.cancel.url}")
+    private String frontendCancelUrl;
+
+    private final RestTemplate restTemplate = new RestTemplate();
+
+    @Transactional
+    public PaymentInitResponse initPayment(Long userId, String customerName, String customerEmail, PaymentInitRequest request) {
+        validateSslConfig();
+
+        Turf turf = turfRepository.findById(request.getTurfId())
+                .orElseThrow(() -> new ResourceNotFoundException("Turf not found"));
+
+        if (turf.getStatus() != TurfStatus.APPROVED) {
+            throw new BadRequestException("Turf is not available for booking");
+        }
+
+        Slot slot = slotRepository.findById(request.getSlotId())
+                .orElseThrow(() -> new ResourceNotFoundException("Slot not found"));
+
+        if (!slot.getTurfId().equals(request.getTurfId())) {
+            throw new BadRequestException("Slot does not belong to this turf");
+        }
+
+        if (slot.getStatus() != SlotStatus.AVAILABLE) {
+            throw new BadRequestException("Slot is not available");
+        }
+
+        if (bookingRepository.findBySlotIdAndBookingDateAndStatus(
+                request.getSlotId(),
+                request.getBookingDate(),
+                BookingStatus.CONFIRMED
+        ).isPresent()) {
+            throw new BadRequestException("Slot is already booked for this date");
+        }
+
+        Payment activePayment = paymentRepository.findFirstBySlotIdAndBookingDateAndStatusInOrderByCreatedAtDesc(
+                request.getSlotId(),
+                request.getBookingDate(),
+                Arrays.asList(PaymentStatus.PENDING, PaymentStatus.SUCCESS, PaymentStatus.PARTIAL, PaymentStatus.FULL)
+        ).orElse(null);
+
+        if (activePayment != null) {
+            if (activePayment.getStatus() == PaymentStatus.PENDING) {
+                throw new BadRequestException("A payment is already in progress for this slot and date");
+            }
+
+            if (isPaidStatus(activePayment.getStatus()) && activePayment.getBookingId() != null) {
+                boolean hasConfirmedBooking = bookingRepository.findById(activePayment.getBookingId())
+                        .map(b -> b.getStatus() == BookingStatus.CONFIRMED)
+                        .orElse(false);
+                if (hasConfirmedBooking) {
+                    throw new BadRequestException("Payment already completed for this slot and date");
+                }
+            }
+
+            if (activePayment.getStatus() != PaymentStatus.PENDING) {
+                activePayment.setStatus(PaymentStatus.FAILED);
+                paymentRepository.save(activePayment);
+            }
+        }
+
+        double totalAmount = roundAmount(slot.getPrice());
+        double paidAmount = calculateAdvanceAmount(totalAmount);
+
+        String transactionId = generateTransactionId();
+
+        MultiValueMap<String, String> payload = new LinkedMultiValueMap<>();
+        payload.add("store_id", storeId);
+        payload.add("store_passwd", storePassword);
+        payload.add("total_amount", formatAmount(paidAmount));
+        payload.add("currency", "BDT");
+        payload.add("tran_id", transactionId);
+        payload.add("success_url", successUrl);
+        payload.add("fail_url", failUrl);
+        payload.add("cancel_url", cancelUrl);
+        payload.add("cus_name", safeValue(customerName, "Test User"));
+        payload.add("cus_email", safeValue(customerEmail, "test@mail.com"));
+        payload.add("cus_add1", "Dhaka");
+        payload.add("cus_city", "Dhaka");
+        payload.add("cus_country", "Bangladesh");
+        payload.add("cus_phone", "01711111111");
+        payload.add("shipping_method", "NO");
+        payload.add("product_name", "Turf Booking");
+        payload.add("product_category", "Service");
+        payload.add("product_profile", "general");
+
+        Map<String, Object> initResponse = createSslSession(payload);
+        String gatewayPageURL = getString(initResponse, "GatewayPageURL");
+        String status = getString(initResponse, "status");
+
+        if (!"SUCCESS".equalsIgnoreCase(status) || isBlank(gatewayPageURL)) {
+            throw new BadRequestException("Failed to initialize SSLCOMMERZ session");
+        }
+
+        Payment payment = new Payment();
+        payment.setUserId(userId);
+        payment.setTurfId(request.getTurfId());
+        payment.setSlotId(request.getSlotId());
+        payment.setBookingDate(request.getBookingDate());
+        payment.setAmount(paidAmount);
+        payment.setTotalAmount(totalAmount);
+        payment.setPaidAmount(paidAmount);
+        payment.setIsPartial(Boolean.TRUE);
+        payment.setTransactionId(transactionId);
+        payment.setBkashPaymentId(transactionId);
+        payment.setMerchantInvoiceNumber(transactionId);
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setRawInitResponse(toJson(initResponse));
+        payment.setRawCreateResponse(payment.getRawInitResponse());
+        paymentRepository.save(payment);
+
+        return new PaymentInitResponse(
+                transactionId,
+                gatewayPageURL,
+                "Pay 50% to confirm booking",
+                totalAmount,
+                paidAmount,
+                true
+        );
+    }
+
+    @Transactional
+    public PaymentInitResponse initRemainingPayment(Long userId, String customerName, String customerEmail, Long bookingId) {
+        validateSslConfig();
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+
+        if (!booking.getUserId().equals(userId)) {
+            throw new BadRequestException("You can only pay for your own booking");
+        }
+
+        if (booking.getStatus() != BookingStatus.CONFIRMED || booking.getPaymentStatus() != PaymentStatus.PARTIAL) {
+            throw new BadRequestException("Remaining payment is only available for partially paid confirmed bookings");
+        }
+
+        double dueAmount = roundAmount(booking.getDueAmount() == null ? 0.0 : booking.getDueAmount());
+        if (dueAmount <= 0) {
+            throw new BadRequestException("No due amount left for this booking");
+        }
+
+        Payment existingPending = paymentRepository.findFirstByUserIdAndSlotIdAndBookingDateAndStatusInOrderByCreatedAtDesc(
+                userId,
+                booking.getSlotId(),
+                booking.getBookingDate(),
+                List.of(PaymentStatus.PENDING)
+        ).orElse(null);
+        if (existingPending != null) {
+            throw new BadRequestException("A payment is already in progress for this booking");
+        }
+
+        String transactionId = generateTransactionId();
+
+        MultiValueMap<String, String> payload = new LinkedMultiValueMap<>();
+        payload.add("store_id", storeId);
+        payload.add("store_passwd", storePassword);
+        payload.add("total_amount", formatAmount(dueAmount));
+        payload.add("currency", "BDT");
+        payload.add("tran_id", transactionId);
+        payload.add("success_url", successUrl);
+        payload.add("fail_url", failUrl);
+        payload.add("cancel_url", cancelUrl);
+        payload.add("cus_name", safeValue(customerName, "Test User"));
+        payload.add("cus_email", safeValue(customerEmail, "test@mail.com"));
+        payload.add("cus_add1", "Dhaka");
+        payload.add("cus_city", "Dhaka");
+        payload.add("cus_country", "Bangladesh");
+        payload.add("cus_phone", "01711111111");
+        payload.add("shipping_method", "NO");
+        payload.add("product_name", "Turf Booking Due Payment");
+        payload.add("product_category", "Service");
+        payload.add("product_profile", "general");
+
+        Map<String, Object> initResponse = createSslSession(payload);
+        String gatewayPageURL = getString(initResponse, "GatewayPageURL");
+        String status = getString(initResponse, "status");
+
+        if (!"SUCCESS".equalsIgnoreCase(status) || isBlank(gatewayPageURL)) {
+            throw new BadRequestException("Failed to initialize SSLCOMMERZ session");
+        }
+
+        Payment payment = new Payment();
+        payment.setUserId(userId);
+        payment.setTurfId(booking.getTurfId());
+        payment.setSlotId(booking.getSlotId());
+        payment.setBookingDate(booking.getBookingDate());
+        payment.setBookingId(bookingId);
+        payment.setAmount(dueAmount);
+        payment.setTotalAmount(roundAmount(booking.getTotalAmount() == null ? dueAmount : booking.getTotalAmount()));
+        payment.setPaidAmount(dueAmount);
+        payment.setIsPartial(Boolean.FALSE);
+        payment.setTransactionId(transactionId);
+        payment.setBkashPaymentId(transactionId);
+        payment.setMerchantInvoiceNumber(transactionId);
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setRawInitResponse(toJson(initResponse));
+        payment.setRawCreateResponse(payment.getRawInitResponse());
+        paymentRepository.save(payment);
+
+        return new PaymentInitResponse(
+                transactionId,
+                gatewayPageURL,
+                "Proceed to pay the remaining booking amount",
+                payment.getTotalAmount(),
+                dueAmount,
+                false
+        );
+    }
+
+    @Transactional
+    public PaymentCallbackResultResponse handleSuccessCallback(Map<String, String> callbackData) {
+        String transactionId = callbackData.get("tran_id");
+        if (isBlank(transactionId)) {
+            throw new BadRequestException("Missing transaction id in callback");
+        }
+
+        Payment payment = paymentRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+
+        return completeSuccess(payment, callbackData.get("val_id"));
+    }
+
+    @Transactional
+    public PaymentCallbackResultResponse verifySuccessForUser(Long userId, String transactionId, String valId) {
+        if (isBlank(transactionId)) {
+            throw new BadRequestException("Missing transaction id");
+        }
+
+        Payment payment = paymentRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+
+        if (!payment.getUserId().equals(userId)) {
+            throw new BadRequestException("You can only verify your own payment");
+        }
+
+        return completeSuccess(payment, valId);
+    }
+
+    @Transactional
+    public PaymentCallbackResultResponse verifyFailForUser(Long userId, String transactionId) {
+        if (isBlank(transactionId)) {
+            throw new BadRequestException("Missing transaction id");
+        }
+
+        Payment payment = paymentRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+
+        if (!payment.getUserId().equals(userId)) {
+            throw new BadRequestException("You can only update your own payment");
+        }
+
+        if (!isPaidStatus(payment.getStatus())) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+        }
+
+        return new PaymentCallbackResultResponse("FAILED", "Payment failed", payment.getTransactionId(), payment.getBookingId());
+    }
+
+    @Transactional
+    public PaymentCallbackResultResponse verifyCancelForUser(Long userId, String transactionId) {
+        if (isBlank(transactionId)) {
+            throw new BadRequestException("Missing transaction id");
+        }
+
+        Payment payment = paymentRepository.findByTransactionId(transactionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment not found"));
+
+        if (!payment.getUserId().equals(userId)) {
+            throw new BadRequestException("You can only update your own payment");
+        }
+
+        if (!isPaidStatus(payment.getStatus())) {
+            payment.setStatus(PaymentStatus.CANCELLED);
+            paymentRepository.save(payment);
+        }
+
+        return new PaymentCallbackResultResponse("CANCELLED", "Payment cancelled", payment.getTransactionId(), payment.getBookingId());
+    }
+
+    private PaymentCallbackResultResponse completeSuccess(Payment payment, String valId) {
+
+        if (isPaidStatus(payment.getStatus())) {
+            Booking existingBooking = payment.getBookingId() == null
+                    ? null
+                    : bookingRepository.findById(payment.getBookingId()).orElse(null);
+            if (existingBooking != null) {
+                return buildCallbackResponse(
+                        "SUCCESS",
+                        "Payment already verified",
+                        payment,
+                        existingBooking
+                );
+            }
+            return new PaymentCallbackResultResponse("SUCCESS", "Payment already verified", payment.getTransactionId(), payment.getBookingId());
+        }
+
+        Map<String, Object> validationResponse = validateWithSsl(valId, payment.getTransactionId());
+        payment.setRawValidationResponse(toJson(validationResponse));
+        payment.setValidationId(valId);
+
+        if (!isValidationSuccess(validationResponse, payment)) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+            return new PaymentCallbackResultResponse("FAILED", "Payment validation failed", payment.getTransactionId(), null);
+        }
+
+        if (!hasMinimumRequiredPayment(payment)) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+            return new PaymentCallbackResultResponse("FAILED", "Minimum 50% advance was not paid", payment.getTransactionId(), null);
+        }
+
+        Booking existingConfirmedForSlot = bookingRepository.findBySlotIdAndBookingDateAndStatus(
+                payment.getSlotId(),
+                payment.getBookingDate(),
+                BookingStatus.CONFIRMED
+        ).orElse(null);
+        if (existingConfirmedForSlot != null
+                && (payment.getBookingId() == null || !existingConfirmedForSlot.getId().equals(payment.getBookingId()))) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+            return new PaymentCallbackResultResponse("FAILED", "Slot already booked by another successful transaction", payment.getTransactionId(), null);
+        }
+
+        Booking booking = ensureConfirmedBooking(payment);
+
+        payment.setGatewayTransactionId(getString(validationResponse, "bank_tran_id"));
+        payment.setTrxId(payment.getGatewayTransactionId());
+        payment.setBookingId(booking.getId());
+        payment.setStatus(Boolean.TRUE.equals(payment.getIsPartial()) ? PaymentStatus.PARTIAL : PaymentStatus.FULL);
+        payment.setRawExecuteResponse(payment.getRawValidationResponse());
+        payment.setRawQueryResponse(payment.getRawValidationResponse());
+        paymentRepository.save(payment);
+
+        return buildCallbackResponse(
+            "SUCCESS",
+            Boolean.TRUE.equals(payment.getIsPartial())
+                ? "Booking confirmed. Remaining amount: " + formatAmount(booking.getDueAmount()) + " BDT"
+                : "Remaining payment successful. Booking fully paid.",
+            payment,
+            booking
+        );
+    }
+
+    @Transactional
+    public PaymentCallbackResultResponse handleFailCallback(Map<String, String> callbackData) {
+        String transactionId = callbackData.get("tran_id");
+        Payment payment = findPaymentByTransactionId(transactionId);
+        if (payment != null && !isPaidStatus(payment.getStatus())) {
+            payment.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(payment);
+        }
+        return new PaymentCallbackResultResponse("FAILED", "Payment failed", transactionId, payment == null ? null : payment.getBookingId());
+    }
+
+    @Transactional
+    public PaymentCallbackResultResponse handleCancelCallback(Map<String, String> callbackData) {
+        String transactionId = callbackData.get("tran_id");
+        Payment payment = findPaymentByTransactionId(transactionId);
+        if (payment != null && !isPaidStatus(payment.getStatus())) {
+            payment.setStatus(PaymentStatus.CANCELLED);
+            paymentRepository.save(payment);
+        }
+        return new PaymentCallbackResultResponse("CANCELLED", "Payment cancelled", transactionId, payment == null ? null : payment.getBookingId());
+    }
+
+    public OwnerEarningsResponse getOwnerEarningsSummary(Long ownerId) {
+        Object[] row = paymentRepository.getOwnerEarningsSummary(ownerId, Arrays.asList(
+                PaymentStatus.SUCCESS,
+                PaymentStatus.PARTIAL,
+                PaymentStatus.FULL
+        ));
+        Long successfulPayments = ((Number) row[0]).longValue();
+        Double totalEarnings = ((Number) row[1]).doubleValue();
+        return new OwnerEarningsResponse(successfulPayments, totalEarnings);
+    }
+
+    public URI buildFrontendRedirectUrl(String status, String transactionId, Long bookingId) {
+        String baseUrl = switch (status) {
+            case "SUCCESS" -> frontendSuccessUrl;
+            case "CANCELLED" -> frontendCancelUrl;
+            default -> frontendFailUrl;
+        };
+
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(baseUrl);
+        if (!isBlank(transactionId)) {
+            builder.queryParam("tran_id", transactionId);
+        }
+        if (bookingId != null) {
+            builder.queryParam("booking_id", bookingId);
+        }
+        return builder.build().toUri();
+    }
+
+    private Booking ensureConfirmedBooking(Payment payment) {
+        Booking booking;
+        if (payment.getBookingId() != null) {
+            booking = bookingRepository.findById(payment.getBookingId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+        } else {
+            BookingRequest bookingRequest = new BookingRequest();
+            bookingRequest.setTurfId(payment.getTurfId());
+            bookingRequest.setSlotId(payment.getSlotId());
+            bookingRequest.setBookingDate(payment.getBookingDate());
+            BookingResponse bookingResponse = bookingService.createBooking(payment.getUserId(), bookingRequest);
+            booking = bookingRepository.findById(bookingResponse.getId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Booking not found after creation"));
+        }
+
+        booking.setStatus(BookingStatus.CONFIRMED);
+
+        double bookingTotal = roundAmount(payment.getTotalAmount() == null ? payment.getAmount() : payment.getTotalAmount());
+        double paymentPaid = roundAmount(payment.getPaidAmount() == null ? payment.getAmount() : payment.getPaidAmount());
+
+        if (Boolean.TRUE.equals(payment.getIsPartial())) {
+            double dueAmount = roundAmount(Math.max(bookingTotal - paymentPaid, 0));
+            booking.setTotalAmount(bookingTotal);
+            booking.setPaidAmount(paymentPaid);
+            booking.setDueAmount(dueAmount);
+            booking.setPaymentStatus(PaymentStatus.PARTIAL);
+        } else {
+            double existingPaid = booking.getPaidAmount() == null ? 0.0 : booking.getPaidAmount();
+            double mergedPaid = roundAmount(existingPaid + paymentPaid);
+            double dueAmount = roundAmount(Math.max(bookingTotal - mergedPaid, 0));
+            booking.setTotalAmount(bookingTotal);
+            booking.setPaidAmount(mergedPaid);
+            booking.setDueAmount(dueAmount);
+            booking.setPaymentStatus(dueAmount <= 0.009 ? PaymentStatus.FULL : PaymentStatus.PARTIAL);
+        }
+
+        bookingRepository.save(booking);
+        return booking;
+    }
+
+    private Map<String, Object> createSslSession(MultiValueMap<String, String> payload) {
+        String url = sslBaseUrl + "/gwprocess/v4/api.php";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(payload, headers);
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            return response.getBody();
+        } catch (HttpStatusCodeException ex) {
+            throw new BadRequestException("SSLCOMMERZ session request failed: " + sanitizeErrorBody(ex.getResponseBodyAsString()));
+        } catch (RestClientException ex) {
+            throw new BadRequestException("Unable to connect to SSLCOMMERZ session API");
+        }
+    }
+
+    private Map<String, Object> validateWithSsl(String valId, String transactionId) {
+        if (isBlank(valId)) {
+            return Map.of("status", "INVALID", "message", "Missing val_id");
+        }
+
+        String url = UriComponentsBuilder
+                .fromUriString(sslBaseUrl + "/validator/api/validationserverAPI.php")
+                .queryParam("val_id", valId)
+                .queryParam("store_id", storeId)
+                .queryParam("store_passwd", storePassword)
+                .queryParam("v", "1")
+                .queryParam("format", "json")
+                .build(true)
+                .toUriString();
+
+        try {
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            return response.getBody();
+        } catch (HttpStatusCodeException ex) {
+            throw new BadRequestException("SSLCOMMERZ validation request failed: " + sanitizeErrorBody(ex.getResponseBodyAsString()));
+        } catch (RestClientException ex) {
+            throw new BadRequestException("Unable to connect to SSLCOMMERZ validation API");
+        }
+    }
+
+    private boolean isValidationSuccess(Map<String, Object> validationResponse, Payment payment) {
+        if (validationResponse == null) {
+            return false;
+        }
+
+        String status = getString(validationResponse, "status");
+        if (!("VALID".equalsIgnoreCase(status) || "VALIDATED".equalsIgnoreCase(status))) {
+            return false;
+        }
+
+        String responseTranId = getString(validationResponse, "tran_id");
+        if (!payment.getTransactionId().equals(responseTranId)) {
+            return false;
+        }
+
+        double paidAmount = parseAmount(getString(validationResponse, "amount"));
+        return amountsMatch(paidAmount, payment.getPaidAmount() == null ? payment.getAmount() : payment.getPaidAmount());
+    }
+
+    private boolean hasMinimumRequiredPayment(Payment payment) {
+        if (payment.getTotalAmount() == null || payment.getPaidAmount() == null) {
+            return false;
+        }
+
+        if (Boolean.TRUE.equals(payment.getIsPartial())) {
+            return payment.getPaidAmount() + 0.009 >= calculateAdvanceAmount(payment.getTotalAmount());
+        }
+
+        return payment.getPaidAmount() > 0;
+    }
+
+    private boolean isPaidStatus(PaymentStatus status) {
+        return status == PaymentStatus.SUCCESS || status == PaymentStatus.PARTIAL || status == PaymentStatus.FULL;
+    }
+
+    private PaymentCallbackResultResponse buildCallbackResponse(String status, String message, Payment payment, Booking booking) {
+        return new PaymentCallbackResultResponse(
+                status,
+                message,
+                payment.getTransactionId(),
+                booking.getId(),
+                booking.getTotalAmount(),
+                booking.getPaidAmount(),
+                booking.getDueAmount(),
+                booking.getPaymentStatus() == null ? null : booking.getPaymentStatus().name()
+        );
+    }
+
+    private Payment findPaymentByTransactionId(String transactionId) {
+        if (isBlank(transactionId)) {
+            return null;
+        }
+        return paymentRepository.findByTransactionId(transactionId).orElse(null);
+    }
+
+    private String generateTransactionId() {
+        return "TXN-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+                + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+    }
+
+    private String sanitizeErrorBody(String body) {
+        if (isBlank(body)) {
+            return "HTTP error";
+        }
+        return body.length() > 400 ? body.substring(0, 400) : body;
+    }
+
+    private String safeValue(String value, String fallback) {
+        return isBlank(value) ? fallback : value;
+    }
+
+    private boolean amountsMatch(double paidAmount, double expectedAmount) {
+        if (paidAmount < 0 || expectedAmount < 0) {
+            return false;
+        }
+        return Math.abs(paidAmount - expectedAmount) < 0.01;
+    }
+
+    private double parseAmount(String amountText) {
+        if (isBlank(amountText)) {
+            return -1;
+        }
+        try {
+            return Double.parseDouble(amountText.trim());
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
+    }
+
+    private String getString(Map<String, Object> source, String key) {
+        if (source == null || source.get(key) == null) {
+            return null;
+        }
+        return String.valueOf(source.get(key));
+    }
+
+    private String toJson(Map<String, Object> source) {
+        if (source == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(source);
+        } catch (JsonProcessingException ex) {
+            return source.toString();
+        }
+    }
+
+    private String formatAmount(Double amount) {
+        return String.format("%.2f", amount);
+    }
+
+    private double calculateAdvanceAmount(double totalAmount) {
+        return roundAmount(totalAmount * 0.50);
+    }
+
+    private double roundAmount(double amount) {
+        return Math.round(amount * 100.0) / 100.0;
+    }
+
+    private void validateSslConfig() {
+        if (isBlank(sslBaseUrl) || isBlank(storeId) || isBlank(storePassword)) {
+            throw new BadRequestException("SSLCOMMERZ is not configured. Please set SSLCOMMERZ_BASE_URL, SSLCOMMERZ_STORE_ID and SSLCOMMERZ_STORE_PASSWORD");
+        }
+        if (isBlank(successUrl) || isBlank(failUrl) || isBlank(cancelUrl)) {
+            throw new BadRequestException("SSLCOMMERZ callback URLs are not configured");
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+}

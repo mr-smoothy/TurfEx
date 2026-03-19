@@ -49,3 +49,8 @@ export async function getTurfBookings(turfId) {
   const response = await api.get(`/owner/turfs/${turfId}/bookings`);
   return response.data;
 }
+
+export async function getOwnerEarningsSummary() {
+  const response = await api.get('/owner/earnings-summary');
+  return response.data;
+}

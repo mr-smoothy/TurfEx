@@ -13,6 +13,10 @@ public class BookingResponse {
     private Long slotId;
     private LocalDate bookingDate;
     private String status;
+    private String paymentStatus;
+    private Double totalAmount;
+    private Double paidAmount;
+    private Double dueAmount;
     private LocalDateTime createdAt;
     
     // Additional fields for detailed view

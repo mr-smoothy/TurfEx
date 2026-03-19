@@ -199,6 +199,7 @@ public class OwnerService {
         response.setSlotId(booking.getSlotId());
         response.setBookingDate(booking.getBookingDate());
         response.setStatus(booking.getStatus().name());
+        response.setPaymentStatus(booking.getPaymentStatus().name());
         response.setCreatedAt(booking.getCreatedAt());
 
         if (turf != null) {
