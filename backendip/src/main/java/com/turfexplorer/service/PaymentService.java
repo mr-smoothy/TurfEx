@@ -50,6 +50,8 @@ import java.util.UUID;
 @Service
 public class PaymentService {
 
+    private static final long PENDING_PAYMENT_TIMEOUT_MINUTES = 15;
+
     @Autowired
     private BookingService bookingService;
 
@@ -135,7 +137,8 @@ public class PaymentService {
 
         if (activePayment != null) {
             if (activePayment.getStatus() == PaymentStatus.PENDING) {
-                throw new BadRequestException("A payment is already in progress for this slot and date");
+                activePayment.setStatus(PaymentStatus.FAILED);
+                paymentRepository.save(activePayment);
             }
 
             if (isPaidStatus(activePayment.getStatus()) && activePayment.getBookingId() != null) {
@@ -240,7 +243,8 @@ public class PaymentService {
                 List.of(PaymentStatus.PENDING)
         ).orElse(null);
         if (existingPending != null) {
-            throw new BadRequestException("A payment is already in progress for this booking");
+            existingPending.setStatus(PaymentStatus.FAILED);
+            paymentRepository.save(existingPending);
         }
 
         String transactionId = generateTransactionId();
@@ -373,6 +377,15 @@ public class PaymentService {
     }
 
     private PaymentCallbackResultResponse completeSuccess(Payment payment, String valId) {
+
+        if (payment.getStatus() != PaymentStatus.PENDING && !isPaidStatus(payment.getStatus())) {
+            return new PaymentCallbackResultResponse(
+                    "FAILED",
+                    "This payment session has expired or was replaced. Please initiate payment again.",
+                    payment.getTransactionId(),
+                    payment.getBookingId()
+            );
+        }
 
         if (isPaidStatus(payment.getStatus())) {
             Booking existingBooking = payment.getBookingId() == null
@@ -613,6 +626,11 @@ public class PaymentService {
         return status == PaymentStatus.SUCCESS || status == PaymentStatus.PARTIAL || status == PaymentStatus.FULL;
     }
 
+    private boolean isPendingPaymentStale(Payment payment) {
+        return payment.getCreatedAt() != null
+                && payment.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(PENDING_PAYMENT_TIMEOUT_MINUTES));
+    }
+
     private PaymentCallbackResultResponse buildCallbackResponse(String status, String message, Payment payment, Booking booking) {
         return new PaymentCallbackResultResponse(
                 status,
@@ -634,8 +652,14 @@ public class PaymentService {
     }
 
     private String generateTransactionId() {
-        return "TXN-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
-                + "-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        for (int i = 0; i < 10; i++) {
+            String candidate = "TXN-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS"))
+                    + "-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+            if (!paymentRepository.existsByTransactionId(candidate)) {
+                return candidate;
+            }
+        }
+        throw new BadRequestException("Unable to generate unique transaction id. Please try again.");
     }
 
     private String sanitizeErrorBody(String body) {
