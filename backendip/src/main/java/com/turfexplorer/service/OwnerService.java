@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,12 +87,14 @@ public class OwnerService {
             throw new BadRequestException("End time must be after start time");
         }
 
+        validateSlotOverlap(turfId, request.getStartTime(), request.getEndTime(), null);
+
         Slot slot = new Slot();
         slot.setTurfId(turfId);
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
         slot.setPrice(request.getPrice());
-        slot.setStatus(SlotStatus.AVAILABLE);
+        slot.setStatus(request.getStatus() != null ? request.getStatus() : SlotStatus.AVAILABLE);
 
         slot = slotRepository.save(slot);
         return mapSlotToResponse(slot);
@@ -111,9 +115,22 @@ public class OwnerService {
             throw new BadRequestException("End time must be after start time");
         }
 
+        boolean hasActiveBookings = hasActiveBookings(slotId);
+        boolean timeChanged = !slot.getStartTime().equals(request.getStartTime())
+                || !slot.getEndTime().equals(request.getEndTime());
+
+        if (hasActiveBookings && timeChanged) {
+            throw new BadRequestException("This slot already has active bookings, so start/end time cannot be changed");
+        }
+
+        validateSlotOverlap(slot.getTurfId(), request.getStartTime(), request.getEndTime(), slot.getId());
+
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
         slot.setPrice(request.getPrice());
+        if (request.getStatus() != null) {
+            slot.setStatus(request.getStatus());
+        }
 
         slot = slotRepository.save(slot);
         return mapSlotToResponse(slot);
@@ -131,7 +148,32 @@ public class OwnerService {
             throw new BadRequestException("You can only delete slots of your own turfs");
         }
 
+        if (hasActiveBookings(slotId)) {
+            throw new BadRequestException("Cannot delete slot because it has active bookings");
+        }
+
         slotRepository.delete(slot);
+    }
+
+    private boolean hasActiveBookings(Long slotId) {
+        return bookingRepository.existsBySlotIdAndStatusIn(
+                slotId,
+                Arrays.asList(BookingStatus.PENDING, BookingStatus.CONFIRMED)
+        );
+    }
+
+    private void validateSlotOverlap(Long turfId, LocalTime startTime, LocalTime endTime, Long excludeSlotId) {
+        List<Slot> existingSlots = excludeSlotId == null
+                ? slotRepository.findByTurfId(turfId)
+                : slotRepository.findByTurfIdAndIdNot(turfId, excludeSlotId);
+
+        boolean overlaps = existingSlots.stream().anyMatch(existing ->
+                startTime.isBefore(existing.getEndTime()) && endTime.isAfter(existing.getStartTime())
+        );
+
+        if (overlaps) {
+            throw new BadRequestException("Slot overlaps with an existing slot for this turf");
+        }
     }
 
     public List<BookingResponse> getTurfBookings(Long turfId, Long userId) {

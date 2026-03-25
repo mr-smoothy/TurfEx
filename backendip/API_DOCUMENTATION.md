@@ -387,9 +387,14 @@ Add a time slot to own turf.
 {
   "startTime": "18:00:00",
   "endTime": "20:00:00",
-  "price": 2000.00
+  "price": 2000.00,
+  "status": "AVAILABLE"
 }
 ```
+
+**Validation Notes:**
+- `endTime` must be after `startTime`
+- Slot cannot overlap any existing slot of the same turf
 
 **Success Response (200):**
 ```json
@@ -410,6 +415,7 @@ Add a time slot to own turf.
 Update slot details.
 
 **Endpoint:** `PUT /api/owner/slots/{slotId}`  
+**Alias Endpoint:** `PUT /api/timeslots/{slotId}`  
 **Access:** Authenticated Users (Own turfs only)  
 **Headers:** `Authorization: Bearer <token>`  
 **Path Parameter:** `slotId` (Long) - Slot ID  
@@ -418,9 +424,15 @@ Update slot details.
 {
   "startTime": "18:00:00",
   "endTime": "20:30:00",
-  "price": 2200.00
+  "price": 2200.00,
+  "status": "AVAILABLE"
 }
 ```
+
+**Validation Notes:**
+- `endTime` must be after `startTime`
+- Updated range cannot overlap another slot of the same turf
+- If slot has active bookings, start/end time cannot be changed (price/status updates remain allowed)
 
 **Success Response (200):**
 ```json
@@ -441,9 +453,13 @@ Update slot details.
 Delete a slot.
 
 **Endpoint:** `DELETE /api/owner/slots/{slotId}`  
+**Alias Endpoint:** `DELETE /api/timeslots/{slotId}`  
 **Access:** Authenticated Users (Own turfs only)  
 **Headers:** `Authorization: Bearer <token>`  
 **Path Parameter:** `slotId` (Long) - Slot ID
+
+**Validation Notes:**
+- Deletion is blocked if slot has active bookings (`PENDING` or `CONFIRMED`)
 
 **Success Response (200):**
 ```json

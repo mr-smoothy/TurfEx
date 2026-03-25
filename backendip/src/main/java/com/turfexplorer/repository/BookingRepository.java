@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,5 +17,6 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findBySlotId(Long slotId);
     Optional<Booking> findBySlotIdAndBookingDateAndStatus(Long slotId, LocalDate bookingDate, BookingStatus status);
     List<Booking> findByTurfIdAndStatus(Long turfId, BookingStatus status);
+    boolean existsBySlotIdAndStatusIn(Long slotId, Collection<BookingStatus> statuses);
     long countByStatus(BookingStatus status);
 }

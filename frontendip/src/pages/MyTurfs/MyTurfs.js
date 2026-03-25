@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyTurfs, deleteTurf, getTurfBookings, getOwnerEarningsSummary } from '../../services/turfService';
-import { addSlot, deleteSlot } from '../../services/slotService';
+import { addSlot, deleteSlot, getSlotsByTurf, updateSlot } from '../../services/slotService';
 import './MyTurfs.css';
 
 const MyTurfs = () => {
@@ -20,7 +20,11 @@ const MyTurfs = () => {
 
   // Slot management state
   const [managingSlots, setManagingSlots] = useState(null);
-  const [slotForm, setSlotForm] = useState({ startTime: '', endTime: '', price: '' });
+  const [slotForm, setSlotForm] = useState({ startTime: '', endTime: '', price: '', status: 'AVAILABLE' });
+  const [slotsByTurf, setSlotsByTurf] = useState({});
+  const [loadingSlotsFor, setLoadingSlotsFor] = useState(null);
+  const [editingSlot, setEditingSlot] = useState(null);
+  const [editSlotForm, setEditSlotForm] = useState({ startTime: '', endTime: '', price: '', status: 'AVAILABLE' });
   const [slotLoading, setSlotLoading] = useState(false);
 
   useEffect(function() {
@@ -84,16 +88,21 @@ const MyTurfs = () => {
       alert('Please enter start and end time.');
       return;
     }
+    if (slotForm.price === '' || Number(slotForm.price) <= 0) {
+      alert('Please enter a valid slot price.');
+      return;
+    }
     setSlotLoading(true);
     try {
       await addSlot(turfId, {
         startTime: slotForm.startTime,
         endTime: slotForm.endTime,
-        price: slotForm.price ? parseFloat(slotForm.price) : null
+        price: parseFloat(slotForm.price),
+        status: slotForm.status
       });
-      setSlotForm({ startTime: '', endTime: '', price: '' });
+      setSlotForm({ startTime: '', endTime: '', price: '', status: 'AVAILABLE' });
       alert('Slot added successfully!');
-      loadMyTurfs();
+      await loadSlotsForTurf(turfId);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to add slot.');
     } finally {
@@ -101,11 +110,72 @@ const MyTurfs = () => {
     }
   }
 
-  async function handleDeleteSlot(slotId) {
+  async function loadSlotsForTurf(turfId) {
+    setLoadingSlotsFor(turfId);
+    try {
+      const slots = await getSlotsByTurf(turfId);
+      setSlotsByTurf(function(prev) {
+        return { ...prev, [turfId]: slots };
+      });
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to load slots.');
+    } finally {
+      setLoadingSlotsFor(null);
+    }
+  }
+
+  async function handleToggleManageSlots(turfId) {
+    const nextOpen = managingSlots === turfId ? null : turfId;
+    setManagingSlots(nextOpen);
+    setEditingSlot(null);
+    if (nextOpen && !slotsByTurf[turfId]) {
+      await loadSlotsForTurf(turfId);
+    }
+  }
+
+  function handleEditSlotStart(turfId, slot) {
+    setEditingSlot({ turfId: turfId, slotId: slot.id });
+    setEditSlotForm({
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      price: slot.price || '',
+      status: slot.status || 'AVAILABLE'
+    });
+  }
+
+  function handleEditSlotCancel() {
+    setEditingSlot(null);
+  }
+
+  async function handleUpdateSlot(turfId, slotId) {
+    if (!editSlotForm.startTime || !editSlotForm.endTime || editSlotForm.price === '') {
+      alert('Please fill start time, end time and price.');
+      return;
+    }
+
+    setSlotLoading(true);
+    try {
+      await updateSlot(slotId, {
+        startTime: editSlotForm.startTime,
+        endTime: editSlotForm.endTime,
+        price: parseFloat(editSlotForm.price),
+        status: editSlotForm.status
+      });
+      setEditingSlot(null);
+      await loadSlotsForTurf(turfId);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to update slot.');
+    } finally {
+      setSlotLoading(false);
+    }
+  }
+
+  async function handleDeleteSlot(turfId, slotId) {
     if (!window.confirm('Delete this slot?')) return;
     try {
       await deleteSlot(slotId);
-      loadMyTurfs();
+      setEditingSlot(null);
+      await loadSlotsForTurf(turfId);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to delete slot.');
     }
@@ -148,6 +218,7 @@ const MyTurfs = () => {
           <div className="turfs-grid">
             {myTurfs.map(function(turf) {
               const statusLabel = turf.status ? turf.status.toUpperCase() : 'PENDING';
+              const turfSlots = slotsByTurf[turf.id] || [];
               return (
                 <div key={turf.id} className="turf-card-my">
                   <div className={`status-badge ${statusLabel === 'APPROVED' ? 'approved' : 'pending'}`}>
@@ -194,7 +265,7 @@ const MyTurfs = () => {
                         📅 View Bookings
                       </button>
                       <button
-                        onClick={function() { setManagingSlots(managingSlots === turf.id ? null : turf.id); }}
+                        onClick={function() { handleToggleManageSlots(turf.id); }}
                         className="btn btn-view-bookings"
                       >
                         🕒 Manage Slots
@@ -213,15 +284,55 @@ const MyTurfs = () => {
                         <h4 style={{ marginBottom: '12px' }}>🕒 Manage Slots</h4>
 
                         {/* Existing slots */}
-                        {turf.slots && turf.slots.length > 0 ? (
+                        {loadingSlotsFor === turf.id ? (
+                          <p style={{ color: '#999', marginBottom: '12px' }}>Loading slots...</p>
+                        ) : turfSlots.length > 0 ? (
                           <div style={{ marginBottom: '12px' }}>
-                            {turf.slots.map(function(slot) {
+                            {turfSlots.map(function(slot) {
+                              const isEditing = editingSlot && editingSlot.turfId === turf.id && editingSlot.slotId === slot.id;
                               return (
-                                <div key={slot.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #eee' }}>
-                                  <span>{slot.startTime} - {slot.endTime}{slot.price ? ` (৳${slot.price})` : ''} — <em>{slot.status}</em></span>
-                                  <button onClick={function() { handleDeleteSlot(slot.id); }} style={{ background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer' }}>
-                                    ✕
-                                  </button>
+                                <div key={slot.id} style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
+                                  {isEditing ? (
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Start</label>
+                                        <input type="time" value={editSlotForm.startTime} onChange={function(e) { setEditSlotForm({ ...editSlotForm, startTime: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                                      </div>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>End</label>
+                                        <input type="time" value={editSlotForm.endTime} onChange={function(e) { setEditSlotForm({ ...editSlotForm, endTime: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }} />
+                                      </div>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Price</label>
+                                        <input type="number" value={editSlotForm.price} onChange={function(e) { setEditSlotForm({ ...editSlotForm, price: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }} />
+                                      </div>
+                                      <div>
+                                        <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Availability</label>
+                                        <select value={editSlotForm.status} onChange={function(e) { setEditSlotForm({ ...editSlotForm, status: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                                          <option value="AVAILABLE">Available</option>
+                                          <option value="BOOKED">Booked</option>
+                                        </select>
+                                      </div>
+                                      <button onClick={function() { handleUpdateSlot(turf.id, slot.id); }} disabled={slotLoading} style={{ background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer' }}>
+                                        {slotLoading ? 'Saving...' : 'Save'}
+                                      </button>
+                                      <button onClick={handleEditSlotCancel} style={{ background: '#7f8c8d', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer' }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                      <span>{slot.startTime} - {slot.endTime}{slot.price ? ` (৳${slot.price})` : ''} — <em>{slot.status}</em></span>
+                                      <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button onClick={function() { handleEditSlotStart(turf.id, slot); }} style={{ background: '#f39c12', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer' }}>
+                                          Edit
+                                        </button>
+                                        <button onClick={function() { handleDeleteSlot(turf.id, slot.id); }} style={{ background: '#e74c3c', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer' }}>
+                                          Delete
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -242,7 +353,14 @@ const MyTurfs = () => {
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Price (৳)</label>
-                            <input type="number" value={slotForm.price} onChange={function(e) { setSlotForm({ ...slotForm, price: e.target.value }); }} placeholder="Optional" style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }} />
+                            <input type="number" value={slotForm.price} onChange={function(e) { setSlotForm({ ...slotForm, price: e.target.value }); }} placeholder="Required" style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }} />
+                          </div>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Availability</label>
+                            <select value={slotForm.status} onChange={function(e) { setSlotForm({ ...slotForm, status: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }}>
+                              <option value="AVAILABLE">Available</option>
+                              <option value="BOOKED">Booked</option>
+                            </select>
                           </div>
                           <button onClick={function() { handleAddSlot(turf.id); }} disabled={slotLoading} style={{ background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 14px', cursor: 'pointer' }}>
                             {slotLoading ? 'Adding...' : '+ Add Slot'}

@@ -5,12 +5,17 @@ export async function addSlot(turfId, slotData) {
   return response.data;
 }
 
+export async function getSlotsByTurf(turfId) {
+  const response = await api.get(`/turfs/${turfId}/slots`);
+  return response.data;
+}
+
 export async function updateSlot(slotId, slotData) {
-  const response = await api.put(`/owner/slots/${slotId}`, slotData);
+  const response = await api.put(`/timeslots/${slotId}`, slotData);
   return response.data;
 }
 
 export async function deleteSlot(slotId) {
-  const response = await api.delete(`/owner/slots/${slotId}`);
+  const response = await api.delete(`/timeslots/${slotId}`);
   return response.data;
 }

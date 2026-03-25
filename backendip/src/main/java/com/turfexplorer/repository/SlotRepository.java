@@ -11,4 +11,5 @@ import java.util.List;
 public interface SlotRepository extends JpaRepository<Slot, Long> {
     List<Slot> findByTurfId(Long turfId);
     List<Slot> findByTurfIdAndStatus(Long turfId, SlotStatus status);
+    List<Slot> findByTurfIdAndIdNot(Long turfId, Long id);
 }
