@@ -154,7 +154,6 @@ const TurfDetails = () => {
             <div className="info-header">
               <h1 className="details-title">{turf.name}</h1>
               <div className="info-meta">
-                <span className="rating">{"\u2B50"} {turf.rating}</span>
                 <span className={`status ${turf.available ? 'available' : 'unavailable'}`}>
                   {turf.available ? '{"\u2713"} Available' : '{"\u2717"} Unavailable'}
                 </span>

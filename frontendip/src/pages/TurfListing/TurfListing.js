@@ -14,7 +14,7 @@ const TurfListing = () => {
   
   // State variables
   const [allTurfs, setAllTurfs] = useState([]);
-  const [sortBy, setSortBy] = useState('rating');
+  const [sortBy, setSortBy] = useState('popular');
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [locationSearch, setLocationSearch] = useState(searchParams.get('location') || '');
   const [manualLocationQuery, setManualLocationQuery] = useState('');
@@ -57,7 +57,7 @@ const TurfListing = () => {
         return 'distance';
       }
       if (!hasDistance && prev === 'distance') {
-        return 'rating';
+        return 'popular';
       }
       return prev;
     });
@@ -110,14 +110,7 @@ const TurfListing = () => {
   }
   
   // Now sort the array based on selected criteria
-  if (sortBy === 'rating') {
-    // Sort by rating: highest first
-    sortedTurfs.sort(function(turfA, turfB) {
-      const ratingA = turfA.rating || 0;
-      const ratingB = turfB.rating || 0;
-      return ratingB - ratingA;  // Higher rating comes first
-    });
-  } else if (sortBy === 'popular') {
+  if (sortBy === 'popular') {
     // Sort by booking count: most popular first
     sortedTurfs.sort(function(turfA, turfB) {
       const countA = turfA.bookingCount || 0;
@@ -345,7 +338,6 @@ const TurfListing = () => {
               onChange={handleSortChange}
             >
               {distanceMode && <option value="distance">Nearest First</option>}
-              <option value="rating">Highest Rated</option>
               <option value="popular">Most Popular</option>
               <option value="priceLow">Price: Low to High</option>
               <option value="priceHigh">Price: High to Low</option>

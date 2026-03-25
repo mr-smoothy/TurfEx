@@ -37,8 +37,7 @@ const TurfCard = ({ turf }) => {
           <span className="turf-price">Tk {turf.price || turf.pricePerHour}/hr</span>
         </div>
 
-        <div className="turf-stats">
-          <span className="turf-rating">{"\u2B50"} {turf.rating || 4.5}</span>
+        <div className="turf-status">
           <span className={`availability ${turf.available ? 'available' : 'unavailable'}`}>
             {turf.available ? '{"\u2713"}' : '{"\u2717"}'}
           </span>

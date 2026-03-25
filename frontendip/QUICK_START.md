@@ -29,7 +29,7 @@ The app will automatically open in your browser at `http://localhost:3000`
 ### 2. **Browse Turfs** (`/turfs`)
    - View all available turfs
    - Filter by availability
-   - Sort by price, rating, or popularity
+   - Sort by price or popularity
    - Click any turf to view details
 
 ### 3. **Turf Details** (`/turf/:id`)
@@ -204,7 +204,7 @@ Ready for production? Consider:
 - [ ] Email/SMS notifications
 - [ ] Image upload functionality
 - [ ] Advanced search and filters
-- [ ] User reviews and ratings
+- [ ] User reviews
 - [ ] Mobile app (React Native)
 
 ---

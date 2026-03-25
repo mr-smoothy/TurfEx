@@ -84,12 +84,6 @@
   align-items: center;
 }
 
-.rating {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: var(--text-dark);
-}
-
 .status {
   padding: 5px 15px;
   border-radius: 20px;

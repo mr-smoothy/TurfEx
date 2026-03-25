@@ -4,7 +4,7 @@ A modern, responsive React-based turf booking system for finding and booking foo
 
 ## Features
 
-- **Easy Browsing**: Browse and filter turfs by price, rating, and availability
+- **Easy Browsing**: Browse and filter turfs by price and availability
 - **User-Friendly Interface**: Clean, modern design with green/blue theme
 - **Complete Booking System**: Browse turfs, view details, select time slots, and book instantly
 - **Admin Dashboard**: Manage turfs, bookings, and view analytics
@@ -79,7 +79,7 @@ frontendip/
 
 ### User Features
 - ✅ Browse all available turfs
-- ✅ Filter and sort turfs by type, price, rating, and availability
+- ✅ Filter and sort turfs by type, price, and availability
 - ✅ View detailed turf information
 - ✅ Select date and time slots for booking
 - ✅ User authentication (login/register)
@@ -131,7 +131,7 @@ frontendip/
 - Real-time availability updates
 - User profile and booking history
 - Map integration for turf locations
-- Reviews and ratings system
+- User reviews system
 - Email/SMS notifications for bookings
 
 ## License

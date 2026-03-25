@@ -122,19 +122,13 @@
   font-weight: 800;
 }
 
-.turf-stats {
+.turf-status {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-bottom: 12px;
   padding: 8px 0;
   border-top: 1px solid #eee;
-}
-
-.turf-rating {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #f39c12;
 }
 
 .availability {
