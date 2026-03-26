@@ -4,10 +4,19 @@ import "./Chatbot.css";
 function ChatBot({ onClose }) {
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState([]);
+  const [location, setLocation] = useState(null);
+  const [locationFetched, setLocationFetched] = useState(false);
   const chatEndRef = useRef(null);
 
   // Example quick options
-  const quickOptions = ["Book Turf", "Cancel", "Login", "Sign Up"];
+  const quickOptions = [
+    "Book Turf",
+    "Cancel",
+    "Login",
+    "Sign Up",
+    "Best turf near me",
+    "Cheap turf under 1000"
+  ];
 
   // Scrolls to the bottom of the chat automatically
   const scrollToBottom = () => {
@@ -18,6 +27,41 @@ function ChatBot({ onClose }) {
     scrollToBottom();
   }, [chat]);
 
+  const getCurrentLocation = () => {
+    if (locationFetched) {
+      return Promise.resolve(location);
+    }
+
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        setLocationFetched(true);
+        resolve(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+          setLocation(userLocation);
+          setLocationFetched(true);
+          resolve(userLocation);
+        },
+        () => {
+          // Permission denied or unavailable; continue chat without location.
+          setLocationFetched(true);
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 6000,
+        }
+      );
+    });
+  };
+
   const sendMessage = async (msgText) => {
     const textToSend = typeof msgText === "string" ? msgText : message;
     if (!textToSend.trim()) return;
@@ -27,12 +71,22 @@ function ChatBot({ onClose }) {
     setMessage(""); // Clear input
 
     try {
+      const userLocation = await getCurrentLocation();
+      const payload = {
+        message: textToSend,
+      };
+
+      if (userLocation?.latitude != null && userLocation?.longitude != null) {
+        payload.latitude = userLocation.latitude;
+        payload.longitude = userLocation.longitude;
+      }
+
       const res = await fetch("http://localhost:8080/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ message: textToSend })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();

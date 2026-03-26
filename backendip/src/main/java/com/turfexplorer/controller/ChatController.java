@@ -1,6 +1,9 @@
 package com.turfexplorer.controller;
 
+import com.turfexplorer.dto.ChatRequest;
+import com.turfexplorer.entity.Turf;
 import com.turfexplorer.enums.BookingStatus;
+import com.turfexplorer.enums.ChatIntent;
 import com.turfexplorer.enums.PaymentStatus;
 import com.turfexplorer.enums.Role;
 import com.turfexplorer.enums.TurfStatus;
@@ -8,47 +11,59 @@ import com.turfexplorer.repository.BookingRepository;
 import com.turfexplorer.repository.PaymentRepository;
 import com.turfexplorer.repository.TurfRepository;
 import com.turfexplorer.repository.UserRepository;
+import com.turfexplorer.service.DistanceService;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @RestController
 @RequestMapping("/api/chat")
 @CrossOrigin(origins = "*")
 public class ChatController {
 
+    private static final Pattern BUDGET_PATTERN = Pattern.compile("(?:under|below)\\s*(?:tk|taka|bdt|৳)?\\s*(\\d+(?:\\.\\d+)?)|within\\s*(?:tk|taka|bdt|৳)\\s*(\\d+(?:\\.\\d+)?)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern RADIUS_PATTERN = Pattern.compile("(?:within|in)\\s*(\\d+(?:\\.\\d+)?)\\s*km", Pattern.CASE_INSENSITIVE);
+
     private final BookingRepository bookingRepository;
     private final PaymentRepository paymentRepository;
     private final TurfRepository turfRepository;
     private final UserRepository userRepository;
+    private final DistanceService distanceService;
 
-    private final Map<String, String> lastIntentBySession = new ConcurrentHashMap<>();
+    private final Map<String, ChatIntent> lastIntentBySession = new ConcurrentHashMap<>();
 
     public ChatController(
             BookingRepository bookingRepository,
             PaymentRepository paymentRepository,
             TurfRepository turfRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            DistanceService distanceService
     ) {
         this.bookingRepository = bookingRepository;
         this.paymentRepository = paymentRepository;
         this.turfRepository = turfRepository;
         this.userRepository = userRepository;
+        this.distanceService = distanceService;
     }
 
     @PostMapping
-    public Map<String, String> chat(@RequestBody Map<String, String> request) {
-        String message = request.getOrDefault("message", "").trim();
-        String sessionId = request.getOrDefault("sessionId", UUID.randomUUID().toString());
-        String userRole = request.getOrDefault("userRole", "guest").trim().toLowerCase(Locale.ROOT);
-        String userName = request.getOrDefault("userName", "friend").trim();
+    public Map<String, String> chat(@RequestBody ChatRequest request) {
+        String message = safeValue(request.getMessage(), "").trim();
+        String sessionId = safeValue(request.getSessionId(), UUID.randomUUID().toString());
+        String userRole = safeValue(request.getUserRole(), "guest").trim().toLowerCase(Locale.ROOT);
+        String userName = safeValue(request.getUserName(), "friend").trim();
 
         if (message.isBlank()) {
             return Map.of(
@@ -58,10 +73,10 @@ public class ChatController {
         }
 
         String q = message.toLowerCase(Locale.ROOT);
-        String intent = detectIntent(q, sessionId);
+        ChatIntent intent = detectIntent(q, sessionId);
         lastIntentBySession.put(sessionId, intent);
 
-        if ("stats".equals(intent)) {
+        if (intent == ChatIntent.STATS) {
             long totalTurfs = turfRepository.count();
             long approvedTurfs = turfRepository.countByStatus(TurfStatus.APPROVED);
             long pendingTurfs = turfRepository.countByStatus(TurfStatus.PENDING);
@@ -80,7 +95,7 @@ public class ChatController {
             return Map.of("reply", statsReply);
         }
 
-        if ("booking".equals(intent)) {
+        if (intent == ChatIntent.BOOKING) {
             long totalBookings = bookingRepository.count();
             long confirmed = bookingRepository.countByStatus(BookingStatus.CONFIRMED);
             return Map.of(
@@ -90,7 +105,7 @@ public class ChatController {
             );
         }
 
-        if ("payment".equals(intent)) {
+        if (intent == ChatIntent.PAYMENT) {
             long success = paymentRepository.countByStatus(PaymentStatus.SUCCESS)
                     + paymentRepository.countByStatus(PaymentStatus.PARTIAL)
                     + paymentRepository.countByStatus(PaymentStatus.FULL);
@@ -107,19 +122,19 @@ public class ChatController {
             );
         }
 
-        if ("cancel".equals(intent)) {
+        if (intent == ChatIntent.CANCEL) {
             return Map.of("reply", "You can cancel from My Bookings. Open My Bookings, find your booking, and click Cancel.");
         }
 
-        if ("login".equals(intent)) {
+        if (intent == ChatIntent.LOGIN) {
             return Map.of("reply", "Click Login in the header, then enter your registered email and password.");
         }
 
-        if ("register".equals(intent)) {
+        if (intent == ChatIntent.REGISTER) {
             return Map.of("reply", "Click Register/Sign Up from the header and create your Turf Explorer account.");
         }
 
-        if ("owner".equals(intent)) {
+        if (intent == ChatIntent.OWNER) {
             long totalOwners = userRepository.countByRole(Role.OWNER);
             long pendingTurfs = turfRepository.countByStatus(TurfStatus.PENDING);
             return Map.of(
@@ -130,7 +145,7 @@ public class ChatController {
             );
         }
 
-        if ("admin".equals(intent)) {
+        if (intent == ChatIntent.ADMIN) {
             long pendingTurfs = turfRepository.countByStatus(TurfStatus.PENDING);
             long approvedTurfs = turfRepository.countByStatus(TurfStatus.APPROVED);
             return Map.of(
@@ -140,11 +155,11 @@ public class ChatController {
             );
         }
 
-        if ("pricing".equals(intent)) {
+        if (intent == ChatIntent.PRICING) {
             return Map.of("reply", "Pricing is defined by slot. Final payable amount comes from the selected slot price.");
         }
 
-        if ("status".equals(intent)) {
+        if (intent == ChatIntent.STATUS) {
             long confirmed = bookingRepository.countByStatus(BookingStatus.CONFIRMED);
             long pending = bookingRepository.countByStatus(BookingStatus.PENDING);
             long cancelled = bookingRepository.countByStatus(BookingStatus.CANCELLED);
@@ -157,7 +172,7 @@ public class ChatController {
             );
         }
 
-        if ("support".equals(intent)) {
+        if (intent == ChatIntent.SUPPORT) {
             String roleHint = switch (userRole) {
                 case "admin" -> "As admin, you can cross-check payment and booking records from dashboard APIs.";
                 case "owner" -> "As owner, verify your turf/slot settings and share booking id with support.";
@@ -166,8 +181,12 @@ public class ChatController {
             return Map.of("reply", "For support, share your booking id and transaction id with admin/project owner for quick troubleshooting.");
         }
 
-        if ("greeting".equals(intent)) {
+        if (intent == ChatIntent.GREETING) {
             return Map.of("reply", "Hello " + safeName(userName) + "! Ask me anything about booking, payments, admin/owner flow, or type 'stats' for live platform numbers.");
+        }
+
+        if (intent == ChatIntent.FIND_BEST_TURF) {
+            return handleFindBestTurf(request, q);
         }
 
         return Map.of(
@@ -177,27 +196,166 @@ public class ChatController {
         );
     }
 
-    private String detectIntent(String q, String sessionId) {
-        String lastIntent = lastIntentBySession.getOrDefault(sessionId, "general");
+    private ChatIntent detectIntent(String q, String sessionId) {
+        ChatIntent lastIntent = lastIntentBySession.getOrDefault(sessionId, ChatIntent.GENERAL);
 
-        if (containsAny(q, "hi", "hello", "hey")) return "greeting";
-        if (containsAny(q, "stats", "summary", "overall", "dashboard")) return "stats";
-        if (containsAny(q, "book", "booking", "reserve", "slot")) return "booking";
-        if (containsAny(q, "payment", "pay", "gateway", "transaction", "success", "failed")) return "payment";
-        if (containsAny(q, "cancel", "refund")) return "cancel";
-        if (containsAny(q, "login", "sign in")) return "login";
-        if (containsAny(q, "register", "signup", "sign up", "create account")) return "register";
-        if (containsAny(q, "owner", "add turf", "my turfs", "slot management")) return "owner";
-        if (containsAny(q, "admin", "approve", "approval", "reject")) return "admin";
-        if (containsAny(q, "price", "pricing", "cost", "amount")) return "pricing";
-        if (containsAny(q, "status", "confirmed", "not confirmed", "pending")) return "status";
-        if (containsAny(q, "support", "help", "contact")) return "support";
+        if (containsAny(q, "hi", "hello", "hey")) return ChatIntent.GREETING;
+        if (containsAny(q, "stats", "summary", "overall", "dashboard")) return ChatIntent.STATS;
+        if (containsAny(q, "book", "booking", "reserve", "slot")) return ChatIntent.BOOKING;
+        if (containsAny(q, "payment", "pay", "gateway", "transaction", "success", "failed")) return ChatIntent.PAYMENT;
+        if (containsAny(q, "cancel", "refund")) return ChatIntent.CANCEL;
+        if (containsAny(q, "login", "sign in")) return ChatIntent.LOGIN;
+        if (containsAny(q, "register", "signup", "sign up", "create account")) return ChatIntent.REGISTER;
+        if (containsAny(q, "owner", "add turf", "my turfs", "slot management")) return ChatIntent.OWNER;
+        if (containsAny(q, "admin", "approve", "approval", "reject")) return ChatIntent.ADMIN;
+        if (containsAny(q, "price", "pricing", "cost", "amount")) return ChatIntent.PRICING;
+        if (containsAny(q, "status", "confirmed", "not confirmed", "pending")) return ChatIntent.STATUS;
+        if (containsAny(q, "support", "help", "contact")) return ChatIntent.SUPPORT;
+        if (containsAny(
+                q,
+                "best turf",
+                "cheap turf",
+                "affordable turf",
+                "turf under",
+                "turf below",
+                "turf within",
+                "best turf near",
+                "nearby turf"
+        )) {
+            return ChatIntent.FIND_BEST_TURF;
+        }
 
         if (containsAny(q, "that", "this", "it", "what about", "and then")) {
             return lastIntent;
         }
 
-        return "general";
+        return ChatIntent.GENERAL;
+    }
+
+    private Map<String, String> handleFindBestTurf(ChatRequest request, String message) {
+        if (request.getLatitude() == null || request.getLongitude() == null) {
+            return Map.of("reply", "Please enable location to find nearby turfs");
+        }
+
+        List<Turf> approvedTurfs = turfRepository.findByStatusAndLatitudeIsNotNullAndLongitudeIsNotNull(TurfStatus.APPROVED);
+        if (approvedTurfs.isEmpty()) {
+            return Map.of("reply", "No turfs found within your budget nearby");
+        }
+
+        boolean nearbyIntent = containsAny(message, "near me", "nearby", "nearest", "close to me");
+        Double parsedBudget = extractBudget(message);
+        Double maxRadiusKm = extractRadiusKm(message);
+        if (nearbyIntent && maxRadiusKm == null) {
+            maxRadiusKm = 5.0;
+        }
+        double maxPriceFilter = parsedBudget == null ? Double.MAX_VALUE : parsedBudget;
+        double scoringBudget = parsedBudget == null
+                ? approvedTurfs.stream().mapToDouble(t -> t.getPricePerHour() == null ? 0.0 : t.getPricePerHour()).max().orElse(1.0)
+                : parsedBudget;
+        if (scoringBudget <= 0) {
+            scoringBudget = 1.0;
+        }
+
+        List<TurfRecommendation> candidates = new ArrayList<>();
+        for (Turf turf : approvedTurfs) {
+            if (turf.getPricePerHour() == null || turf.getPricePerHour() > maxPriceFilter) {
+                continue;
+            }
+
+            Double distanceKm = distanceService.calculateDistance(
+                    request.getLatitude(),
+                    request.getLongitude(),
+                    turf.getLatitude(),
+                    turf.getLongitude()
+            );
+            if (distanceKm == null) {
+                continue;
+            }
+
+            if (maxRadiusKm != null && distanceKm > maxRadiusKm) {
+                continue;
+            }
+
+            double score = (distanceKm * 0.7) + ((turf.getPricePerHour() / scoringBudget) * 0.3);
+            candidates.add(new TurfRecommendation(turf, distanceKm, score));
+        }
+
+        if (candidates.isEmpty()) {
+            return Map.of("reply", "No turfs found within your budget nearby");
+        }
+
+        candidates.sort(
+                Comparator
+                        .comparingDouble(TurfRecommendation::score)
+                        .thenComparingDouble(TurfRecommendation::distanceKm)
+                        .thenComparingDouble(r -> r.turf().getPricePerHour())
+                        .thenComparing(r -> safeValue(r.turf().getName(), ""))
+        );
+
+        int resultCount = Math.min((maxRadiusKm != null || nearbyIntent) ? 1 : 3, candidates.size());
+        StringBuilder reply = new StringBuilder(
+            maxRadiusKm != null
+                ? "Here is the best turf for you within " + String.format(Locale.US, "%.1f", maxRadiusKm) + " km:\n\n"
+                : "Here are the best turfs for you:\n\n"
+        );
+        for (int i = 0; i < resultCount; i++) {
+            TurfRecommendation rec = candidates.get(i);
+            reply.append(i + 1)
+                    .append(". ")
+                    .append(safeValue(rec.turf().getName(), "Turf"))
+                    .append(" - ৳")
+                    .append(formatAmount(rec.turf().getPricePerHour()))
+                    .append("/hr - ")
+                    .append(String.format(Locale.US, "%.1f", rec.distanceKm()))
+                    .append(" km away");
+
+            if (i < resultCount - 1) {
+                reply.append("\n");
+            }
+        }
+
+        return Map.of("reply", reply.toString());
+    }
+
+    private Double extractBudget(String message) {
+        Matcher matcher = BUDGET_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        try {
+            String value = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            return value == null ? null : Double.parseDouble(value);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private Double extractRadiusKm(String message) {
+        Matcher matcher = RADIUS_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+
+        try {
+            return Double.parseDouble(matcher.group(1));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private String formatAmount(Double amount) {
+        if (amount == null) {
+            return "0";
+        }
+        if (amount % 1 == 0) {
+            return String.valueOf(amount.longValue());
+        }
+        return String.format(Locale.US, "%.2f", amount);
+    }
+
+    private String safeValue(String value, String fallback) {
+        return value == null ? fallback : value;
     }
 
     private boolean containsAny(String source, String... terms) {
@@ -212,4 +370,6 @@ public class ChatController {
     private String safeName(String userName) {
         return userName == null || userName.isBlank() ? "there" : userName;
     }
+
+    private record TurfRecommendation(Turf turf, double distanceKm, double score) {}
 }
