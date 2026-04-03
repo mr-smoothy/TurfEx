@@ -26,7 +26,9 @@ function normalizeTurf(t) {
     normalizedTurf.image = t.imageUrl;
   }
 
-  if (t.status === 'APPROVED') {
+  if (typeof t.available === 'boolean') {
+    normalizedTurf.available = t.available;
+  } else if (t.status === 'APPROVED') {
     normalizedTurf.available = true;
   }
 
@@ -47,6 +49,9 @@ export async function getAllTurfs(params = {}) {
   }
   if (params.lng !== undefined && params.lng !== null) {
     searchParams.append('lng', params.lng);
+  }
+  if (params.availableOnly === true) {
+    searchParams.append('availableOnly', 'true');
   }
 
   const query = searchParams.toString();
@@ -103,6 +108,13 @@ export async function getMyTurfs() {
   return normalizedTurfs;
 }
 
+export async function updateTurfAvailability(turfId, available) {
+  const response = await api.put(`/owner/turfs/${turfId}/availability`, {
+    available,
+  });
+  return normalizeTurf(response.data);
+}
+
 // Owner: delete a turf
 export async function deleteTurf(turfId) {
   const response = await api.delete(`/owner/turfs/${turfId}`);
@@ -112,10 +124,5 @@ export async function deleteTurf(turfId) {
 // Owner: get bookings for a turf
 export async function getTurfBookings(turfId) {
   const response = await api.get(`/owner/turfs/${turfId}/bookings`);
-  return response.data;
-}
-
-export async function getOwnerEarningsSummary() {
-  const response = await api.get('/owner/earnings-summary');
   return response.data;
 }

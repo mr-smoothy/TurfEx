@@ -22,9 +22,9 @@ const TurfCard = ({ turf }) => {
     availabilityClass = 'available';
   }
 
-  let availabilityText = '{"\u2717"}';
+  let availabilityText = '✗ Unavailable';
   if (turf.available) {
-    availabilityText = '{"\u2713"}';
+    availabilityText = '✓ Available';
   }
 
   let placeholderDisplay = 'flex';

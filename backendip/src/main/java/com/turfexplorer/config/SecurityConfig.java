@@ -71,12 +71,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/turfs", "/api/turfs/**").permitAll()
                 .requestMatchers("/api/chat").permitAll()
-                .requestMatchers("/api/payment/success", "/api/payment/fail", "/api/payment/cancel").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/owner/**").hasAnyRole("OWNER", "ADMIN")
                 .requestMatchers("/api/timeslots/**").hasAnyRole("OWNER", "ADMIN")
                 .requestMatchers("/api/bookings/**").authenticated()
-                .requestMatchers("/api/payment/**").authenticated()
                 .anyRequest().authenticated()
         );
     }

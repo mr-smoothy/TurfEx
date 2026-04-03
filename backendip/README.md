@@ -7,6 +7,7 @@ A comprehensive REST API backend for the Turf Explorer platform - a turf booking
 - **JWT Authentication** - Secure login and registration
 - **Role-based Access Control** - USER and ADMIN roles
 - **RESTful API** - Clean, organized endpoints
+- **Simple Booking Confirmation** - Pending bookings are finalized with "Pay to Confirm"
 - **Layered Architecture** - Controller → Service → Repository pattern
 - **MySQL Database** - Relational data storage
 - **Exception Handling** - Global error handling
@@ -127,6 +128,7 @@ After running the schema, you can login with:
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | POST | `/api/bookings` | Create booking | Authenticated |
+| PUT | `/api/bookings/{id}/confirm` | Confirm pending booking (Pay to Confirm) | Authenticated |
 | GET | `/api/bookings/my-bookings` | Get user bookings | Authenticated |
 | DELETE | `/api/bookings/{id}` | Cancel booking | Authenticated |
 
@@ -253,7 +255,34 @@ Content-Type: application/json
   "turfId": 1,
   "slotId": 2,
   "bookingDate": "2024-03-15",
+  "status": "PENDING",
+  "paymentStatus": "PENDING",
+  "createdAt": "2024-03-07T12:30:00",
+  "turfName": "Chittagong Sports Arena",
+  "turfLocation": "Agrabad, Chittagong",
+  "slotTime": "08:00:00 - 10:00:00",
+  "price": 1500.00
+}
+```
+
+### 4.1 Confirm Booking (Pay to Confirm)
+
+**Request:**
+```http
+PUT /api/bookings/1/confirm
+Authorization: Bearer <token>
+```
+
+**Response:**
+```json
+{
+  "id": 1,
+  "userId": 2,
+  "turfId": 1,
+  "slotId": 2,
+  "bookingDate": "2024-03-15",
   "status": "CONFIRMED",
+  "paymentStatus": "PAID",
   "createdAt": "2024-03-07T12:30:00",
   "turfName": "Chittagong Sports Arena",
   "turfLocation": "Agrabad, Chittagong",

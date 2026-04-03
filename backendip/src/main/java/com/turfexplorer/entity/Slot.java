@@ -1,6 +1,5 @@
 package com.turfexplorer.entity;
 
-import com.turfexplorer.enums.SlotStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -31,10 +30,6 @@ public class Slot {
     
     @Column(nullable = false)
     private Double price;
-    
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private SlotStatus status = SlotStatus.AVAILABLE;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

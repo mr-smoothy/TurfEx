@@ -92,7 +92,7 @@ You should receive a JWT token!
 
 1. **Test with Postman:**
    - Import the API endpoints from `API_DOCUMENTATION.md`
-   - Try login, browse turfs, create bookings
+   - Try login, browse turfs, create a pending booking, then confirm it with `PUT /api/bookings/{id}/confirm`
 
 2. **Connect Frontend:**
    - Update frontend API URL to `http://localhost:8080/api`

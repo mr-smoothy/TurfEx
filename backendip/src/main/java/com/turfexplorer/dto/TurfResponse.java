@@ -16,6 +16,7 @@ public class TurfResponse {
     private String description;
     private String imageUrl;
     private Long ownerId;
+    private Boolean available;
     private String status;
     private LocalDateTime createdAt;
     // Populated only when distance-based search is requested

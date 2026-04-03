@@ -6,8 +6,6 @@ import com.turfexplorer.entity.Booking;
 import com.turfexplorer.entity.Slot;
 import com.turfexplorer.entity.Turf;
 import com.turfexplorer.enums.BookingStatus;
-import com.turfexplorer.enums.PaymentStatus;
-import com.turfexplorer.enums.SlotStatus;
 import com.turfexplorer.enums.TurfStatus;
 import com.turfexplorer.exception.BadRequestException;
 import com.turfexplorer.exception.ResourceNotFoundException;
@@ -39,9 +37,13 @@ public class BookingService {
         Turf turf = turfRepository.findById(request.getTurfId())
                 .orElseThrow(() -> new ResourceNotFoundException("Turf not found"));
 
-        // Check that turf is approved and available for booking
+        // Check that turf is approved and open for booking
         if (turf.getStatus() != TurfStatus.APPROVED) {
             throw new BadRequestException("Turf is not available for booking");
+        }
+
+        if (!Boolean.TRUE.equals(turf.getAvailable())) {
+            throw new BadRequestException("Turf is currently unavailable for booking");
         }
 
         // Verify slot exists
@@ -51,11 +53,6 @@ public class BookingService {
         // Check if slot belongs to turf
         if (!slot.getTurfId().equals(request.getTurfId())) {
             throw new BadRequestException("Slot does not belong to this turf");
-        }
-
-        // Check if slot is available
-        if (slot.getStatus() != SlotStatus.AVAILABLE) {
-            throw new BadRequestException("Slot is not available");
         }
 
         // Check if slot is already booked for this date
@@ -71,7 +68,6 @@ public class BookingService {
         booking.setSlotId(request.getSlotId());
         booking.setBookingDate(request.getBookingDate());
         booking.setStatus(BookingStatus.PENDING);
-        booking.setPaymentStatus(PaymentStatus.PENDING);
 
         booking = bookingRepository.save(booking);
 
@@ -109,6 +105,38 @@ public class BookingService {
         bookingRepository.save(booking);
     }
 
+    @Transactional
+    public BookingResponse confirmBooking(Long bookingId, Long userId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+
+        if (!booking.getUserId().equals(userId)) {
+            throw new BadRequestException("You can only confirm your own bookings");
+        }
+
+        if (booking.getStatus() == BookingStatus.CANCELLED) {
+            throw new BadRequestException("Cancelled bookings cannot be confirmed");
+        }
+
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            Turf turf = turfRepository.findById(booking.getTurfId()).orElse(null);
+            Slot slot = slotRepository.findById(booking.getSlotId()).orElse(null);
+            return mapToResponse(booking, turf, slot);
+        }
+
+        if (bookingRepository.findBySlotIdAndBookingDateAndStatus(
+                booking.getSlotId(), booking.getBookingDate(), BookingStatus.CONFIRMED).isPresent()) {
+            throw new BadRequestException("Slot is already booked for this date");
+        }
+
+        booking.setStatus(BookingStatus.CONFIRMED);
+        booking = bookingRepository.save(booking);
+
+        Turf turf = turfRepository.findById(booking.getTurfId()).orElse(null);
+        Slot slot = slotRepository.findById(booking.getSlotId()).orElse(null);
+        return mapToResponse(booking, turf, slot);
+    }
+
     private BookingResponse mapToResponse(Booking booking, Turf turf, Slot slot) {
         BookingResponse response = new BookingResponse();
         response.setId(booking.getId());
@@ -117,10 +145,7 @@ public class BookingService {
         response.setSlotId(booking.getSlotId());
         response.setBookingDate(booking.getBookingDate());
         response.setStatus(booking.getStatus().name());
-        response.setPaymentStatus(booking.getPaymentStatus().name());
-        response.setTotalAmount(booking.getTotalAmount());
-        response.setPaidAmount(booking.getPaidAmount());
-        response.setDueAmount(booking.getDueAmount());
+        response.setPaymentStatus(booking.getStatus() == BookingStatus.CONFIRMED ? "PAID" : "PENDING");
         response.setCreatedAt(booking.getCreatedAt());
 
         if (turf != null) {

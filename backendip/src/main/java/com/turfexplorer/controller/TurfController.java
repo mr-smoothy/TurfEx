@@ -20,8 +20,9 @@ public class TurfController {
     public ResponseEntity<List<TurfResponse>> getAllTurfs(
             @RequestParam(value = "lat", required = false) Double latitude,
             @RequestParam(value = "lng", required = false) Double longitude,
-            @RequestParam(value = "search", required = false) String search) {
-        return ResponseEntity.ok(turfService.getAllApprovedTurfs(latitude, longitude, search));
+            @RequestParam(value = "search", required = false) String search,
+            @RequestParam(value = "availableOnly", required = false, defaultValue = "false") Boolean availableOnly) {
+        return ResponseEntity.ok(turfService.getAllApprovedTurfs(latitude, longitude, search, availableOnly));
     }
 
     @GetMapping("/nearby")

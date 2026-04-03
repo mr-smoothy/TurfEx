@@ -27,8 +27,8 @@ public class TurfService {
     @Autowired
     private DistanceService distanceService;
 
-    public List<TurfResponse> getAllApprovedTurfs(Double latitude, Double longitude, String search) {
-        List<Turf> turfs = getApprovedTurfsByName(search);
+    public List<TurfResponse> getAllApprovedTurfs(Double latitude, Double longitude, String search, Boolean availableOnly) {
+        List<Turf> turfs = getApprovedTurfsByName(search, availableOnly);
         List<TurfResponse> responses = new ArrayList<>();
         for (Turf turf : turfs) {
             TurfResponse response = mapToResponse(turf, latitude, longitude);
@@ -69,7 +69,7 @@ public class TurfService {
     public List<TurfResponse> getNearbyTurfs(Double latitude, Double longitude, int limit) {
         if (latitude == null || longitude == null) {
             // Fallback to standard listing when coordinates are missing
-            return getAllApprovedTurfs(null, null, null);
+            return getAllApprovedTurfs(null, null, null, false);
         }
 
         int cappedLimit = Math.max(1, Math.min(limit, 50));
@@ -96,7 +96,7 @@ public class TurfService {
 
         if (distanceAware.isEmpty()) {
             // Preserve legacy behavior instead of returning an empty list when coordinates are missing in DB
-            return getAllApprovedTurfs(null, null, null);
+            return getAllApprovedTurfs(null, null, null, false);
         }
 
         List<TurfResponse> limitedResponses = new ArrayList<>();
@@ -122,13 +122,23 @@ public class TurfService {
         return slotResponses;
     }
 
-    private List<Turf> getApprovedTurfsByName(String search) {
+    private List<Turf> getApprovedTurfsByName(String search, Boolean availableOnly) {
+        boolean shouldFilterAvailable = Boolean.TRUE.equals(availableOnly);
+
         if (search == null || search.trim().isEmpty()) {
+            if (shouldFilterAvailable) {
+                return turfRepository.findByStatusAndAvailableTrue(TurfStatus.APPROVED);
+            }
             return turfRepository.findByStatus(TurfStatus.APPROVED);
         }
 
         String normalizedSearch = search.trim();
-        List<Turf> matchedTurfs = turfRepository.findByStatusAndNameContainingIgnoreCase(TurfStatus.APPROVED, normalizedSearch);
+        List<Turf> matchedTurfs;
+        if (shouldFilterAvailable) {
+            matchedTurfs = turfRepository.findByStatusAndAvailableTrueAndNameContainingIgnoreCase(TurfStatus.APPROVED, normalizedSearch);
+        } else {
+            matchedTurfs = turfRepository.findByStatusAndNameContainingIgnoreCase(TurfStatus.APPROVED, normalizedSearch);
+        }
         List<Turf> safeMatchedTurfs = new ArrayList<>();
         for (Turf turf : matchedTurfs) {
             if (turf != null) {
@@ -151,6 +161,7 @@ public class TurfService {
         response.setDescription(turf.getDescription());
         response.setImageUrl(turf.getImageUrl());
         response.setOwnerId(turf.getOwnerId());
+        response.setAvailable(turf.getAvailable());
         response.setStatus(turf.getStatus().name());
         response.setCreatedAt(turf.getCreatedAt());
         if (latitude != null && longitude != null) {
@@ -167,7 +178,6 @@ public class TurfService {
         response.setStartTime(slot.getStartTime());
         response.setEndTime(slot.getEndTime());
         response.setPrice(slot.getPrice());
-        response.setStatus(slot.getStatus().name());
         response.setCreatedAt(slot.getCreatedAt());
         return response;
     }

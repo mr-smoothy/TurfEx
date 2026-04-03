@@ -5,7 +5,6 @@ import com.turfexplorer.entity.Booking;
 import com.turfexplorer.entity.Slot;
 import com.turfexplorer.entity.Turf;
 import com.turfexplorer.enums.BookingStatus;
-import com.turfexplorer.enums.SlotStatus;
 import com.turfexplorer.enums.TurfStatus;
 import com.turfexplorer.exception.BadRequestException;
 import com.turfexplorer.exception.ResourceNotFoundException;
@@ -19,9 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class OwnerService {
@@ -47,6 +44,7 @@ public class OwnerService {
         turf.setDescription(request.getDescription());
         turf.setImageUrl(request.getImageUrl());
         turf.setOwnerId(userId);
+        turf.setAvailable(request.getAvailable() == null ? Boolean.TRUE : request.getAvailable());
         turf.setStatus(TurfStatus.PENDING);
 
         turf = turfRepository.save(turf);
@@ -98,11 +96,6 @@ public class OwnerService {
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
         slot.setPrice(request.getPrice());
-        if (request.getStatus() != null) {
-            slot.setStatus(request.getStatus());
-        } else {
-            slot.setStatus(SlotStatus.AVAILABLE);
-        }
 
         slot = slotRepository.save(slot);
         return mapSlotToResponse(slot);
@@ -136,9 +129,6 @@ public class OwnerService {
         slot.setStartTime(request.getStartTime());
         slot.setEndTime(request.getEndTime());
         slot.setPrice(request.getPrice());
-        if (request.getStatus() != null) {
-            slot.setStatus(request.getStatus());
-        }
 
         slot = slotRepository.save(slot);
         return mapSlotToResponse(slot);
@@ -212,24 +202,21 @@ public class OwnerService {
         return bookingResponses;
     }
 
-    public Map<String, Long> getTurfStatistics(Long turfId, Long userId) {
+    public TurfResponse updateTurfAvailability(Long turfId, Long userId, Boolean available) {
         Turf turf = turfRepository.findById(turfId)
                 .orElseThrow(() -> new ResourceNotFoundException("Turf not found"));
 
         if (!turf.getOwnerId().equals(userId)) {
-            throw new BadRequestException("You can only view statistics of your own turfs");
+            throw new BadRequestException("You can only update your own turfs");
         }
 
-        Map<String, Long> stats = new HashMap<>();
-        long pendingCount = bookingRepository.findByTurfIdAndStatus(turfId, BookingStatus.PENDING).size();
-        long confirmedCount = bookingRepository.findByTurfIdAndStatus(turfId, BookingStatus.CONFIRMED).size();
-        long cancelledCount = bookingRepository.findByTurfIdAndStatus(turfId, BookingStatus.CANCELLED).size();
+        if (available == null) {
+            throw new BadRequestException("Availability is required");
+        }
 
-        stats.put("pending", pendingCount);
-        stats.put("confirmed", confirmedCount);
-        stats.put("cancelled", cancelledCount);
-
-        return stats;
+        turf.setAvailable(available);
+        turf = turfRepository.save(turf);
+        return mapTurfToResponse(turf);
     }
 
     private TurfResponse mapTurfToResponse(Turf turf) {
@@ -244,6 +231,7 @@ public class OwnerService {
         response.setDescription(turf.getDescription());
         response.setImageUrl(turf.getImageUrl());
         response.setOwnerId(turf.getOwnerId());
+        response.setAvailable(turf.getAvailable());
         response.setStatus(turf.getStatus().name());
         response.setCreatedAt(turf.getCreatedAt());
         return response;
@@ -256,7 +244,6 @@ public class OwnerService {
         response.setStartTime(slot.getStartTime());
         response.setEndTime(slot.getEndTime());
         response.setPrice(slot.getPrice());
-        response.setStatus(slot.getStatus().name());
         response.setCreatedAt(slot.getCreatedAt());
         return response;
     }
@@ -269,7 +256,7 @@ public class OwnerService {
         response.setSlotId(booking.getSlotId());
         response.setBookingDate(booking.getBookingDate());
         response.setStatus(booking.getStatus().name());
-        response.setPaymentStatus(booking.getPaymentStatus().name());
+        response.setPaymentStatus(booking.getStatus() == BookingStatus.CONFIRMED ? "PAID" : "PENDING");
         response.setCreatedAt(booking.getCreatedAt());
 
         if (turf != null) {

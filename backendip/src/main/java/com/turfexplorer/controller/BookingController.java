@@ -45,4 +45,12 @@ public class BookingController {
         bookingService.cancelBooking(id, userId);
         return ResponseEntity.ok(new MessageResponse("Booking cancelled successfully"));
     }
+
+    @PutMapping("/{id}/confirm")
+    public ResponseEntity<BookingResponse> confirmBooking(
+            @PathVariable Long id,
+            Authentication authentication) {
+        Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
+        return ResponseEntity.ok(bookingService.confirmBooking(id, userId));
+    }
 }

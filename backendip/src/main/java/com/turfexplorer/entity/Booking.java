@@ -1,7 +1,6 @@
 package com.turfexplorer.entity;
 
 import com.turfexplorer.enums.BookingStatus;
-import com.turfexplorer.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -36,19 +35,6 @@ public class Booking {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BookingStatus status = BookingStatus.PENDING;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "payment_status", nullable = false)
-    private PaymentStatus paymentStatus = PaymentStatus.PENDING;
-
-    @Column(name = "total_amount", columnDefinition = "DOUBLE DEFAULT 0")
-    private Double totalAmount = 0.0;
-
-    @Column(name = "paid_amount", columnDefinition = "DOUBLE DEFAULT 0")
-    private Double paidAmount = 0.0;
-
-    @Column(name = "due_amount", columnDefinition = "DOUBLE DEFAULT 0")
-    private Double dueAmount = 0.0;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();

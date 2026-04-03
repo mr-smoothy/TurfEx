@@ -55,7 +55,7 @@ public class GlobalExceptionHandler {
         logger.error("Database integrity error", ex);
         ErrorResponse error = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
-                "Invalid payment data or duplicate transaction. Please try again.",
+            "Invalid request data or duplicate record. Please try again.",
                 LocalDateTime.now()
         );
         return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
