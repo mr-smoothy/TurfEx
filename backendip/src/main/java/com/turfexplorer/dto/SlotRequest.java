@@ -1,6 +1,5 @@
 package com.turfexplorer.dto;
 
-import com.turfexplorer.enums.SlotStatus;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
@@ -19,7 +18,4 @@ public class SlotRequest {
     @NotNull(message = "Price is required")
     @Positive(message = "Price must be positive")
     private Double price;
-
-    // Optional for updates; defaults to AVAILABLE when omitted on create.
-    private SlotStatus status;
 }

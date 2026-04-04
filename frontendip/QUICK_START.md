@@ -61,7 +61,7 @@ The app will automatically open in your browser at `http://localhost:3000`
 
 ### 8. **My Bookings** (`/my-bookings`)
    - View all your bookings
-   - Pay for pending bookings
+   - Use Pay to Confirm for pending bookings
    - Cancel bookings
 
 ### 9. **Profile** (`/profile`)

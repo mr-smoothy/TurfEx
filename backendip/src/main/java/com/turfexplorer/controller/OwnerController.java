@@ -3,7 +3,6 @@ package com.turfexplorer.controller;
 import com.turfexplorer.dto.*;
 import com.turfexplorer.security.UserDetailsServiceImpl;
 import com.turfexplorer.service.OwnerService;
-import com.turfexplorer.service.PaymentService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -11,7 +10,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/owner")
@@ -22,9 +20,6 @@ public class OwnerController {
 
     @Autowired
     private UserDetailsServiceImpl userDetailsService;
-
-    @Autowired
-    private PaymentService paymentService;
 
     @PostMapping("/turfs")
     public ResponseEntity<TurfResponse> submitTurf(
@@ -47,6 +42,15 @@ public class OwnerController {
         Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
         ownerService.deleteTurf(id, userId);
         return ResponseEntity.ok(new MessageResponse("Turf deleted successfully"));
+    }
+
+    @PutMapping("/turfs/{id}/availability")
+    public ResponseEntity<TurfResponse> updateTurfAvailability(
+            @PathVariable Long id,
+            @Valid @RequestBody TurfAvailabilityRequest request,
+            Authentication authentication) {
+        Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
+        return ResponseEntity.ok(ownerService.updateTurfAvailability(id, userId, request.getAvailable()));
     }
 
     @PostMapping("/turfs/{turfId}/slots")
@@ -82,19 +86,5 @@ public class OwnerController {
             Authentication authentication) {
         Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
         return ResponseEntity.ok(ownerService.getTurfBookings(turfId, userId));
-    }
-
-    @GetMapping("/turfs/{turfId}/statistics")
-    public ResponseEntity<Map<String, Long>> getTurfStatistics(
-            @PathVariable Long turfId,
-            Authentication authentication) {
-        Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
-        return ResponseEntity.ok(ownerService.getTurfStatistics(turfId, userId));
-    }
-
-    @GetMapping("/earnings-summary")
-    public ResponseEntity<OwnerEarningsResponse> getOwnerEarningsSummary(Authentication authentication) {
-        Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
-        return ResponseEntity.ok(paymentService.getOwnerEarningsSummary(userId));
     }
 }

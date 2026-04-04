@@ -56,7 +56,7 @@ const TurfDetails = () => {
           getTurfSlots(id)
         ]);
         setTurf(turfData);
-        setSlots(slotsData.filter(function(s) { return s.status === 'AVAILABLE'; }));
+        setSlots(slotsData);
       } catch (err) {
         setError('Turf not found or failed to load.');
       } finally {
@@ -142,10 +142,10 @@ const TurfDetails = () => {
   }
 
   let turfAvailabilityClass = 'unavailable';
-  let turfAvailabilityText = '{"\u2717"} Unavailable';
+  let turfAvailabilityText = '✗ Unavailable';
   if (turf && turf.available) {
     turfAvailabilityClass = 'available';
-    turfAvailabilityText = '{"\u2713"} Available';
+    turfAvailabilityText = '✓ Available';
   }
 
   let turfPricePerHour = turf.pricePerHour;
@@ -182,22 +182,24 @@ const TurfDetails = () => {
           <div className="details-image-section">
             <div className="details-image">
               {hasTurfImage ? (
-                <img 
-                  src={turf.image} 
-                  alt={turf.name} 
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} 
+                <img
+                  src={turf.image}
+                  alt={turf.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
                 />
               ) : (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#f0f0f0',
-                  borderRadius: '12px',
-                  fontSize: '80px'
-                }}>
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#f0f0f0',
+                    borderRadius: '12px',
+                    fontSize: '80px'
+                  }}
+                >
                   {"\uD83C\uDFDF"}
                 </div>
               )}
@@ -239,90 +241,90 @@ const TurfDetails = () => {
               <h3>About this Turf</h3>
               <p>{turf.description}</p>
             </div>
+
+            {/* Booking Section with Date and Time Selection */}
+            {!isBookingRestrictedRole && (
+              <div className="booking-section">
+                <h2 className="booking-title">Book Your Slot</h2>
+
+                <div className="booking-form">
+                  {/* Date Selection */}
+                  <div className="form-group">
+                    <label htmlFor="date-picker">Select Date</label>
+                    <input
+                      type="date"
+                      id="date-picker"
+                      min={today}
+                      value={selectedDate}
+                      onChange={handleDateChange}
+                      className="date-input"
+                    />
+                  </div>
+
+                  {/* Time Slot Selection */}
+                  {selectedDate && (
+                    <div className="form-group">
+                      <label>Select Time Slot</label>
+                      <div className="slots-grid">
+                        {slots.length > 0 ? slots.map(function(slot) {
+                          const isSelected = selectedSlot && selectedSlot.id === slot.id;
+                          return (
+                            <button
+                              key={slot.id}
+                              className={getSlotButtonClass(isSelected)}
+                              onClick={function() { handleSlotSelect(slot); }}
+                            >
+                              {slot.startTime} - {slot.endTime}
+                              {slot.price && (
+                                <span style={{ display: 'block', fontSize: '0.85em' }}>
+                                  Tk {slot.price}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        }) : (
+                          <p style={{ color: '#999' }}>No available slots for this turf.</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Booking Summary */}
+                  {selectedDate && selectedSlot && (
+                    <div className="booking-summary">
+                      <h3>Booking Summary</h3>
+                      <div className="summary-item">
+                        <span>Turf:</span>
+                        <span>{turf.name}</span>
+                      </div>
+                      <div className="summary-item">
+                        <span>Date:</span>
+                        <span>{selectedDate}</span>
+                      </div>
+                      <div className="summary-item">
+                        <span>Time:</span>
+                        <span>{selectedSlot.startTime} - {selectedSlot.endTime}</span>
+                      </div>
+                      <div className="summary-item total">
+                        <span>Total:</span>
+                        <span>Tk {getBookingTotalPrice()}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Book Button */}
+                  <button
+                    className="btn btn-primary book-btn"
+                    onClick={handleBooking}
+                    disabled={!turf.available || !selectedDate || !selectedSlot || bookingLoading}
+                  >
+                    {bookingButtonLabel}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Booking Section with Date and Time Selection */}
-        {!isBookingRestrictedRole && (
-          <div className="booking-section">
-            <h2 className="booking-title">Book Your Slot</h2>
-
-            <div className="booking-form">
-              {/* Date Selection */}
-              <div className="form-group">
-                <label htmlFor="date-picker">Select Date</label>
-                <input
-                  type="date"
-                  id="date-picker"
-                  min={today}
-                  value={selectedDate}
-                  onChange={handleDateChange}
-                  className="date-input"
-                />
-              </div>
-
-              {/* Time Slot Selection */}
-              {selectedDate && (
-                <div className="form-group">
-                  <label>Select Time Slot</label>
-                  <div className="slots-grid">
-                    {slots.length > 0 ? slots.map(function(slot) {
-                      const isSelected = selectedSlot && selectedSlot.id === slot.id;
-                      return (
-                        <button
-                          key={slot.id}
-                          className={getSlotButtonClass(isSelected)}
-                          onClick={function() { handleSlotSelect(slot); }}
-                        >
-                          {slot.startTime} - {slot.endTime}
-                          {slot.price && (
-                            <span style={{ display: 'block', fontSize: '0.85em' }}>
-                              Tk {slot.price}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    }) : (
-                      <p style={{ color: '#999' }}>No available slots for this turf.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Booking Summary */}
-              {selectedDate && selectedSlot && (
-                <div className="booking-summary">
-                  <h3>Booking Summary</h3>
-                  <div className="summary-item">
-                    <span>Turf:</span>
-                    <span>{turf.name}</span>
-                  </div>
-                  <div className="summary-item">
-                    <span>Date:</span>
-                    <span>{selectedDate}</span>
-                  </div>
-                  <div className="summary-item">
-                    <span>Time:</span>
-                    <span>{selectedSlot.startTime} - {selectedSlot.endTime}</span>
-                  </div>
-                  <div className="summary-item total">
-                    <span>Total:</span>
-                    <span>Tk {getBookingTotalPrice()}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Book Button */}
-              <button
-                className="btn btn-primary book-btn"
-                onClick={handleBooking}
-                disabled={!turf.available || !selectedDate || !selectedSlot || bookingLoading}
-              >
-                {bookingButtonLabel}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

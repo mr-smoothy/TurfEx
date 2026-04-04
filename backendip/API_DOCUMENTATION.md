@@ -195,7 +195,7 @@ Get all available time slots for a turf.
 ## 📅 Booking Endpoints (Authenticated)
 
 ### 6. Create Booking
-Book a turf slot.
+Create a pending booking for a turf slot.
 
 **Endpoint:** `POST /api/bookings`  
 **Access:** Authenticated Users  
@@ -217,7 +217,8 @@ Book a turf slot.
   "turfId": 1,
   "slotId": 2,
   "bookingDate": "2024-03-15",
-  "status": "CONFIRMED",
+  "status": "PENDING",
+  "paymentStatus": "PENDING",
   "createdAt": "2024-03-07T12:30:00",
   "turfName": "Chittagong Sports Arena",
   "turfLocation": "Agrabad, Chittagong",
@@ -253,7 +254,8 @@ Retrieve all bookings for the authenticated user.
     "turfId": 1,
     "slotId": 2,
     "bookingDate": "2024-03-15",
-    "status": "CONFIRMED",
+    "status": "PENDING",
+    "paymentStatus": "PENDING",
     "createdAt": "2024-03-07T12:30:00",
     "turfName": "Chittagong Sports Arena",
     "turfLocation": "Agrabad, Chittagong",
@@ -265,7 +267,37 @@ Retrieve all bookings for the authenticated user.
 
 ---
 
-### 8. Cancel Booking
+### 8. Confirm Booking (Pay to Confirm)
+Confirm a pending booking.
+
+**Endpoint:** `PUT /api/bookings/{id}/confirm`  
+**Access:** Authenticated Users (Own bookings only)  
+**Headers:** `Authorization: Bearer <token>`  
+**Path Parameter:** `id` (Long) - Booking ID
+
+**Example:** `PUT /api/bookings/1/confirm`
+
+**Success Response (200):**
+```json
+{
+  "id": 1,
+  "userId": 2,
+  "turfId": 1,
+  "slotId": 2,
+  "bookingDate": "2024-03-15",
+  "status": "CONFIRMED",
+  "paymentStatus": "PAID",
+  "createdAt": "2024-03-07T12:30:00",
+  "turfName": "Chittagong Sports Arena",
+  "turfLocation": "Agrabad, Chittagong",
+  "slotTime": "08:00:00 - 10:00:00",
+  "price": 1500.00
+}
+```
+
+---
+
+### 9. Cancel Booking
 Cancel a booking.
 
 **Endpoint:** `DELETE /api/bookings/{id}`  

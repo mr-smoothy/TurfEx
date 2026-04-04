@@ -46,6 +46,9 @@ public class Turf {
     
     @Column(name = "owner_id", nullable = false)
     private Long ownerId;
+
+    @Column(name = "available", nullable = false)
+    private Boolean available = Boolean.TRUE;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

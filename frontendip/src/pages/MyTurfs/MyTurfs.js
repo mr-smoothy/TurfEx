@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMyTurfs, deleteTurf, getTurfBookings, getOwnerEarningsSummary } from '../../services/turfService';
+import { getMyTurfs, deleteTurf, getTurfBookings, updateTurfAvailability } from '../../services/turfService';
 import { addSlot, deleteSlot, getSlotsByTurf, updateSlot } from '../../services/slotService';
 import './MyTurfs.css';
 
@@ -15,16 +15,15 @@ const MyTurfs = () => {
   const [viewingBookings, setViewingBookings] = useState(null);
   const [selectedTurf, setSelectedTurf] = useState(null);
   const [turfBookings, setTurfBookings] = useState({});
-  const [earningsSummary, setEarningsSummary] = useState({ successfulPayments: 0, totalEarnings: 0 });
   const [loading, setLoading] = useState(true);
 
   // Slot management state
   const [managingSlots, setManagingSlots] = useState(null);
-  const [slotForm, setSlotForm] = useState({ startTime: '', endTime: '', price: '', status: 'AVAILABLE' });
+  const [slotForm, setSlotForm] = useState({ startTime: '', endTime: '', price: '' });
   const [slotsByTurf, setSlotsByTurf] = useState({});
   const [loadingSlotsFor, setLoadingSlotsFor] = useState(null);
   const [editingSlot, setEditingSlot] = useState(null);
-  const [editSlotForm, setEditSlotForm] = useState({ startTime: '', endTime: '', price: '', status: 'AVAILABLE' });
+  const [editSlotForm, setEditSlotForm] = useState({ startTime: '', endTime: '', price: '' });
   const [slotLoading, setSlotLoading] = useState(false);
 
   function getApiErrorMessage(err, fallback) {
@@ -39,17 +38,6 @@ const MyTurfs = () => {
       return 'PENDING';
     }
     return status.toUpperCase();
-  }
-
-  function countBookingsByStatus(turfId, targetStatus) {
-    const bookings = turfBookings[turfId] || [];
-    let count = 0;
-    for (const booking of bookings) {
-      if (booking.status === targetStatus) {
-        count += 1;
-      }
-    }
-    return count;
   }
 
   function getBookingStatusLower(status) {
@@ -94,6 +82,27 @@ const MyTurfs = () => {
     return '+ Add Slot';
   }
 
+  function getTurfAvailabilityLabel(available) {
+    if (available) {
+      return 'Open for Booking';
+    }
+    return 'Temporarily Closed';
+  }
+
+  function getTurfAvailabilityClass(available) {
+    if (available) {
+      return 'status-badge approved';
+    }
+    return 'status-badge pending';
+  }
+
+  function getToggleAvailabilityButtonLabel(available) {
+    if (available) {
+      return 'Close Turf';
+    }
+    return 'Open Turf';
+  }
+
   function closeBookingsModal() {
     setViewingBookings(null);
     setSelectedTurf(null);
@@ -118,13 +127,6 @@ const MyTurfs = () => {
     try {
       const turfs = await getMyTurfs();
       setMyTurfs(turfs);
-
-      try {
-        const earnings = await getOwnerEarningsSummary();
-        setEarningsSummary(earnings);
-      } catch (e) {
-        setEarningsSummary({ successfulPayments: 0, totalEarnings: 0 });
-      }
 
       // Load bookings for each turf
       const bookingsMap = {};
@@ -169,10 +171,9 @@ const MyTurfs = () => {
       await addSlot(turfId, {
         startTime: slotForm.startTime,
         endTime: slotForm.endTime,
-        price: parseFloat(slotForm.price),
-        status: slotForm.status
+        price: parseFloat(slotForm.price)
       });
-      setSlotForm({ startTime: '', endTime: '', price: '', status: 'AVAILABLE' });
+      setSlotForm({ startTime: '', endTime: '', price: '' });
       alert('Slot added successfully!');
       await loadSlotsForTurf(turfId);
     } catch (err) {
@@ -215,17 +216,11 @@ const MyTurfs = () => {
       slotPrice = slot.price;
     }
 
-    let slotStatus = 'AVAILABLE';
-    if (slot.status) {
-      slotStatus = slot.status;
-    }
-
     setEditingSlot({ turfId: turfId, slotId: slot.id });
     setEditSlotForm({
       startTime: slot.startTime,
       endTime: slot.endTime,
-      price: slotPrice,
-      status: slotStatus
+      price: slotPrice
     });
   }
 
@@ -244,8 +239,7 @@ const MyTurfs = () => {
       await updateSlot(slotId, {
         startTime: editSlotForm.startTime,
         endTime: editSlotForm.endTime,
-        price: parseFloat(editSlotForm.price),
-        status: editSlotForm.status
+        price: parseFloat(editSlotForm.price)
       });
       setEditingSlot(null);
       await loadSlotsForTurf(turfId);
@@ -267,6 +261,22 @@ const MyTurfs = () => {
     }
   }
 
+  async function handleToggleAvailability(turf) {
+    try {
+      const updatedTurf = await updateTurfAvailability(turf.id, !turf.available);
+      setMyTurfs(function(prevTurfs) {
+        return prevTurfs.map(function(existingTurf) {
+          if (existingTurf.id === updatedTurf.id) {
+            return updatedTurf;
+          }
+          return existingTurf;
+        });
+      });
+    } catch (err) {
+      alert(getApiErrorMessage(err, 'Failed to update turf availability.'));
+    }
+  }
+
   if (loading) {
     return (
       <div className="my-turfs-page">
@@ -283,10 +293,6 @@ const MyTurfs = () => {
         <div className="container">
           <h1>My Turfs</h1>
           <p>View all your submitted turfs</p>
-          <div style={{ marginTop: '12px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            <span className="stat stat-confirmed">💸 Total Earnings: ৳{Number(earningsSummary.totalEarnings || 0).toFixed(2)}</span>
-            <span className="stat stat-pending">✅ Successful Payments: {earningsSummary.successfulPayments || 0}</span>
-          </div>
         </div>
       </div>
 
@@ -305,9 +311,6 @@ const MyTurfs = () => {
             {myTurfs.map(function(turf) {
               const statusLabel = getStatusText(turf.status);
               const turfSlots = slotsByTurf[turf.id] || [];
-              const pendingCount = countBookingsByStatus(turf.id, 'PENDING');
-              const confirmedCount = countBookingsByStatus(turf.id, 'CONFIRMED');
-              const cancelledCount = countBookingsByStatus(turf.id, 'CANCELLED');
 
               let turfImageUrl = null;
               if (turf.image) {
@@ -321,6 +324,10 @@ const MyTurfs = () => {
                 <div key={turf.id} className="turf-card-my">
                   <div className={getApprovalBadgeClass(statusLabel)}>
                     {getApprovalBadgeText(statusLabel)}
+                  </div>
+
+                  <div className={getTurfAvailabilityClass(turf.available)} style={{ marginTop: '8px' }}>
+                    {turf.available ? '✅ ' : '❌ '}{getTurfAvailabilityLabel(turf.available)}
                   </div>
 
                   <div className="turf-image-my">
@@ -349,18 +356,18 @@ const MyTurfs = () => {
                     <p className="price">💰 ৳{turf.pricePerHour}/hour</p>
                     {turf.description && <p className="description">{turf.description}</p>}
 
-                    <div className="turf-stats">
-                      <span className="stat stat-pending">⏳ {pendingCount} Pending</span>
-                      <span className="stat stat-confirmed">✅ {confirmedCount} Confirmed</span>
-                      <span className="stat stat-cancelled">❌ {cancelledCount} Cancelled</span>
-                    </div>
-
                     <div className="turf-actions-my">
                       <button
                         onClick={function() { setSelectedTurf(turf); setViewingBookings(turf.id); }}
                         className="btn btn-view-bookings"
                       >
                         📅 View Bookings
+                      </button>
+                      <button
+                        onClick={function() { handleToggleAvailability(turf); }}
+                        className="btn btn-view-bookings"
+                      >
+                        {turf.available ? '🚫 ' : '✅ '}{getToggleAvailabilityButtonLabel(turf.available)}
                       </button>
                       <button
                         onClick={function() { handleToggleManageSlots(turf.id); }}
@@ -404,13 +411,6 @@ const MyTurfs = () => {
                                         <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Price</label>
                                         <input type="number" value={editSlotForm.price} onChange={function(e) { setEditSlotForm({ ...editSlotForm, price: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }} />
                                       </div>
-                                      <div>
-                                        <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Availability</label>
-                                        <select value={editSlotForm.status} onChange={function(e) { setEditSlotForm({ ...editSlotForm, status: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }}>
-                                          <option value="AVAILABLE">Available</option>
-                                          <option value="BOOKED">Booked</option>
-                                        </select>
-                                      </div>
                                       <button onClick={function() { handleUpdateSlot(turf.id, slot.id); }} disabled={slotLoading} style={{ background: '#3498db', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer' }}>
                                         {getSaveSlotButtonLabel()}
                                       </button>
@@ -420,7 +420,7 @@ const MyTurfs = () => {
                                     </div>
                                   ) : (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                                      <span>{slot.startTime} - {slot.endTime}{getSlotPriceLabel(slot)} — <em>{slot.status}</em></span>
+                                      <span>{slot.startTime} - {slot.endTime}{getSlotPriceLabel(slot)}</span>
                                       <div style={{ display: 'flex', gap: '6px' }}>
                                         <button onClick={function() { handleEditSlotStart(turf.id, slot); }} style={{ background: '#f39c12', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 10px', cursor: 'pointer' }}>
                                           Edit
@@ -452,13 +452,6 @@ const MyTurfs = () => {
                           <div>
                             <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Price (৳)</label>
                             <input type="number" value={slotForm.price} onChange={function(e) { setSlotForm({ ...slotForm, price: e.target.value }); }} placeholder="Required" style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc', width: '100px' }} />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '0.82em', marginBottom: '4px' }}>Availability</label>
-                            <select value={slotForm.status} onChange={function(e) { setSlotForm({ ...slotForm, status: e.target.value }); }} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #ccc' }}>
-                              <option value="AVAILABLE">Available</option>
-                              <option value="BOOKED">Booked</option>
-                            </select>
                           </div>
                           <button onClick={function() { handleAddSlot(turf.id); }} disabled={slotLoading} style={{ background: '#2ecc71', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 14px', cursor: 'pointer' }}>
                             {getAddSlotButtonLabel()}

@@ -4,11 +4,9 @@ import com.turfexplorer.dto.ChatRequest;
 import com.turfexplorer.entity.Turf;
 import com.turfexplorer.enums.BookingStatus;
 import com.turfexplorer.enums.ChatIntent;
-import com.turfexplorer.enums.PaymentStatus;
 import com.turfexplorer.enums.Role;
 import com.turfexplorer.enums.TurfStatus;
 import com.turfexplorer.repository.BookingRepository;
-import com.turfexplorer.repository.PaymentRepository;
 import com.turfexplorer.repository.TurfRepository;
 import com.turfexplorer.repository.UserRepository;
 import com.turfexplorer.service.DistanceService;
@@ -37,7 +35,6 @@ public class ChatController {
     private static final Pattern RADIUS_PATTERN = Pattern.compile("(?:within|in)\\s*(\\d+(?:\\.\\d+)?)\\s*km", Pattern.CASE_INSENSITIVE);
 
     private final BookingRepository bookingRepository;
-    private final PaymentRepository paymentRepository;
     private final TurfRepository turfRepository;
     private final UserRepository userRepository;
     private final DistanceService distanceService;
@@ -46,13 +43,11 @@ public class ChatController {
 
     public ChatController(
             BookingRepository bookingRepository,
-            PaymentRepository paymentRepository,
             TurfRepository turfRepository,
             UserRepository userRepository,
             DistanceService distanceService
     ) {
         this.bookingRepository = bookingRepository;
-        this.paymentRepository = paymentRepository;
         this.turfRepository = turfRepository;
         this.userRepository = userRepository;
         this.distanceService = distanceService;
@@ -68,7 +63,7 @@ public class ChatController {
         if (message.isBlank()) {
             return Map.of(
                     "reply",
-                    "Hi " + safeName(userName) + "! I can help with booking, payment, owner/admin actions, and live platform stats."
+                    "Hi " + safeName(userName) + "! I can help with booking, confirmation, owner/admin actions, and live platform stats."
             );
         }
 
@@ -82,15 +77,13 @@ public class ChatController {
             long pendingTurfs = turfRepository.countByStatus(TurfStatus.PENDING);
             long totalBookings = bookingRepository.count();
             long confirmedBookings = bookingRepository.countByStatus(BookingStatus.CONFIRMED);
-            long pendingPayments = paymentRepository.countByStatus(PaymentStatus.PENDING);
-                long successPayments = paymentRepository.countByStatus(PaymentStatus.SUCCESS)
-                    + paymentRepository.countByStatus(PaymentStatus.PARTIAL)
-                    + paymentRepository.countByStatus(PaymentStatus.FULL);
+                long pendingBookings = bookingRepository.countByStatus(BookingStatus.PENDING);
+                long cancelledBookings = bookingRepository.countByStatus(BookingStatus.CANCELLED);
 
             String statsReply = "Live snapshot: turfs " + approvedTurfs + "/" + totalTurfs
                     + " approved, " + pendingTurfs + " pending approval; bookings " + confirmedBookings
-                    + "/" + totalBookings + " confirmed; payments " + successPayments
-                    + " success, " + pendingPayments + " pending.";
+                    + "/" + totalBookings + " confirmed, " + pendingBookings + " pending, "
+                    + cancelledBookings + " cancelled.";
 
             return Map.of("reply", statsReply);
         }
@@ -100,25 +93,18 @@ public class ChatController {
             long confirmed = bookingRepository.countByStatus(BookingStatus.CONFIRMED);
             return Map.of(
                     "reply",
-                    "To book: open Turfs, pick turf/date/slot, then Pay Now. Booking confirms only after payment verification."
+                    "To book: open Turfs, pick turf/date/slot, then click Pay to Confirm on your booking card."
                             + " Current confirmation trend: " + confirmed + " of " + totalBookings + " bookings are confirmed."
             );
         }
 
         if (intent == ChatIntent.PAYMENT) {
-            long success = paymentRepository.countByStatus(PaymentStatus.SUCCESS)
-                    + paymentRepository.countByStatus(PaymentStatus.PARTIAL)
-                    + paymentRepository.countByStatus(PaymentStatus.FULL);
-            long failed = paymentRepository.countByStatus(PaymentStatus.FAILED);
-            long cancelled = paymentRepository.countByStatus(PaymentStatus.CANCELLED);
-            long pending = paymentRepository.countByStatus(PaymentStatus.PENDING);
+                long confirmed = bookingRepository.countByStatus(BookingStatus.CONFIRMED);
+                long pending = bookingRepository.countByStatus(BookingStatus.PENDING);
             return Map.of(
                     "reply",
-                    "Payment flow: Pay Now -> gateway redirect -> callback/verify -> booking confirmation only on success."
-                            + " Live payment status totals: success " + success
-                            + ", failed " + failed
-                            + ", cancelled " + cancelled
-                            + ", pending " + pending + "."
+                    "Booking confirmation is now simple: click Pay to Confirm on your booking card."
+                        + " Live booking totals: " + confirmed + " confirmed, " + pending + " pending."
             );
         }
 
@@ -165,7 +151,7 @@ public class ChatController {
             long cancelled = bookingRepository.countByStatus(BookingStatus.CANCELLED);
             return Map.of(
                     "reply",
-                    "Booking status updates after payment verification."
+                    "Booking status updates after you use Pay to Confirm."
                             + " Current totals: confirmed " + confirmed
                             + ", pending " + pending
                             + ", cancelled " + cancelled + "."
@@ -175,19 +161,19 @@ public class ChatController {
         if (intent == ChatIntent.SUPPORT) {
             String roleHint;
             if ("admin".equals(userRole)) {
-                roleHint = "As admin, you can cross-check payment and booking records from dashboard APIs.";
+                roleHint = "As admin, you can cross-check booking records from dashboard APIs.";
             } else if ("owner".equals(userRole)) {
                 roleHint = "As owner, verify your turf/slot settings and share booking id with support.";
             } else {
-                roleHint = "Share booking id and transaction id with support for fastest resolution.";
+                roleHint = "Share booking id with support for fastest resolution.";
             }
 
-            String supportReply = "For support, share your booking id and transaction id with admin/project owner for quick troubleshooting. " + roleHint;
+            String supportReply = "For support, share your booking id with admin/project owner for quick troubleshooting. " + roleHint;
             return Map.of("reply", supportReply);
         }
 
         if (intent == ChatIntent.GREETING) {
-            return Map.of("reply", "Hello " + safeName(userName) + "! Ask me anything about booking, payments, admin/owner flow, or type 'stats' for live platform numbers.");
+            return Map.of("reply", "Hello " + safeName(userName) + "! Ask me anything about booking, confirmation, admin/owner flow, or type 'stats' for live platform numbers.");
         }
 
         if (intent == ChatIntent.FIND_BEST_TURF) {
@@ -196,7 +182,7 @@ public class ChatController {
 
         return Map.of(
                 "reply",
-                "I can help with booking, payment, cancel, login/register, owner/admin tasks, pricing, and live stats."
+            "I can help with booking, confirmation, cancel, login/register, owner/admin tasks, pricing, and live stats."
                         + " Try asking: 'show stats' or 'why booking pending?'."
         );
     }
@@ -207,7 +193,7 @@ public class ChatController {
         if (containsAny(q, "hi", "hello", "hey")) return ChatIntent.GREETING;
         if (containsAny(q, "stats", "summary", "overall", "dashboard")) return ChatIntent.STATS;
         if (containsAny(q, "book", "booking", "reserve", "slot")) return ChatIntent.BOOKING;
-        if (containsAny(q, "payment", "pay", "gateway", "transaction", "success", "failed")) return ChatIntent.PAYMENT;
+        if (containsAny(q, "payment", "pay", "confirm", "paid")) return ChatIntent.PAYMENT;
         if (containsAny(q, "cancel", "refund")) return ChatIntent.CANCEL;
         if (containsAny(q, "login", "sign in")) return ChatIntent.LOGIN;
         if (containsAny(q, "register", "signup", "sign up", "create account")) return ChatIntent.REGISTER;

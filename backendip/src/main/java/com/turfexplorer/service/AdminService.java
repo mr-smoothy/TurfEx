@@ -72,6 +72,7 @@ public class AdminService {
         response.setDescription(turf.getDescription());
         response.setImageUrl(turf.getImageUrl());
         response.setOwnerId(turf.getOwnerId());
+        response.setAvailable(turf.getAvailable());
         response.setStatus(turf.getStatus().name());
         response.setCreatedAt(turf.getCreatedAt());
         return response;

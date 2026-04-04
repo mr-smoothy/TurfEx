@@ -39,7 +39,6 @@ It explains where to start, what each file does, and how data moves.
 - backendip/src/main/java/com/turfexplorer/controller/BookingController.java
 - backendip/src/main/java/com/turfexplorer/controller/OwnerController.java
 - backendip/src/main/java/com/turfexplorer/controller/AdminController.java
-- backendip/src/main/java/com/turfexplorer/controller/PaymentController.java
 - backendip/src/main/java/com/turfexplorer/controller/UserController.java
 - backendip/src/main/java/com/turfexplorer/controller/ChatController.java
 
@@ -49,7 +48,6 @@ It explains where to start, what each file does, and how data moves.
 - backendip/src/main/java/com/turfexplorer/service/BookingService.java
 - backendip/src/main/java/com/turfexplorer/service/OwnerService.java
 - backendip/src/main/java/com/turfexplorer/service/AdminService.java
-- backendip/src/main/java/com/turfexplorer/service/PaymentService.java
 
 ## 2) How one feature flows (simple mental model)
 
@@ -62,8 +60,8 @@ Example: user books a turf.
 5. Backend BookingController receives request.
 6. BookingService validates turf, slot, and date conflict.
 7. Booking is created as PENDING.
-8. User pays through payment flow.
-9. PaymentService verifies and turns booking into CONFIRMED.
+8. User opens MyBookings and clicks Pay to Confirm.
+9. Backend confirms via PUT /api/bookings/{id}/confirm and marks booking CONFIRMED.
 
 ## 3) Beginner coding style used in refactor
 
@@ -87,7 +85,6 @@ The code was simplified toward these rules:
 
 3. Change booking rules
 - backendip/src/main/java/com/turfexplorer/service/BookingService.java
-- backendip/src/main/java/com/turfexplorer/service/PaymentService.java
 
 4. Change turf listing and nearby logic
 - frontendip/src/pages/TurfListing/TurfListing.js

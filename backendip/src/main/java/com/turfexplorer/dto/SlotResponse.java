@@ -12,6 +12,5 @@ public class SlotResponse {
     private LocalTime startTime;
     private LocalTime endTime;
     private Double price;
-    private String status;
     private LocalDateTime createdAt;
 }

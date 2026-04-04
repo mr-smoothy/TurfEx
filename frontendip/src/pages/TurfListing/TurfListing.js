@@ -14,8 +14,8 @@ const TurfListing = () => {
   // State variables
   const [allTurfs, setAllTurfs] = useState([]);
   const [sortBy, setSortBy] = useState('priceLow');
-  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const [userCoords, setUserCoords] = useState(null);
   const [hasDistanceData, setHasDistanceData] = useState(false);
   const [locationStatus, setLocationStatus] = useState('');
@@ -37,9 +37,6 @@ const TurfListing = () => {
   }
 
   function getNoResultsMessage() {
-    if (showAvailableOnly) {
-      return 'No available turfs at the moment.';
-    }
     return 'No turfs found. Please check back later!';
   }
 
@@ -48,7 +45,7 @@ const TurfListing = () => {
     const initialSearch = (searchParams.get('search') || '').trim();
     setSearchQuery(initialSearch);
     const initialStatus = getInitialSearchStatus(initialSearch);
-    loadTurfs(initialSearch, userCoords, initialStatus);
+    loadTurfs(initialSearch, userCoords, initialStatus, showAvailableOnly);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -58,7 +55,7 @@ const TurfListing = () => {
     setHasDistanceData(hasDistance);
   }
 
-  async function loadTurfs(query, coords, successMessage) {
+  async function loadTurfs(query, coords, successMessage, availableOnly = showAvailableOnly) {
     setLoading(true);
     setError('');
     try {
@@ -70,6 +67,7 @@ const TurfListing = () => {
         params.lat = coords.lat;
         params.lng = coords.lng;
       }
+      params.availableOnly = availableOnly;
 
       const serverTurfs = await getAllTurfs(params);
       const normalizedQuery = (query || '').trim().toLowerCase();
@@ -95,17 +93,7 @@ const TurfListing = () => {
   const filteredTurfs = [];
   for (let i = 0; i < allTurfs.length; i++) {
     const turf = allTurfs[i];
-    let shouldInclude = true;  // Assume we include this turf
-    
-    // Check availability filter
-    if (showAvailableOnly && !turf.available) {
-      shouldInclude = false;  // User wants available only, this one isn't
-    }
-    
-    // Add to filtered list if it passed all checks
-    if (shouldInclude) {
-      filteredTurfs.push(turf);
-    }
+    filteredTurfs.push(turf);
   }
 
   // Step 2: Sort the filtered turfs based on selected option
@@ -139,11 +127,6 @@ const TurfListing = () => {
   }
 
   // Handler functions for user interactions
-  function handleAvailabilityFilterChange(event) {
-    // When user checks/unchecks "Show only available", update the filter
-    setShowAvailableOnly(event.target.checked);
-  }
-
   async function handleSortChange(event) {
     const selectedSort = event.target.value;
 
@@ -158,7 +141,13 @@ const TurfListing = () => {
       return;
     }
 
-    await loadTurfs(searchQuery.trim(), userCoords, 'Showing turfs closest to you');
+    await loadTurfs(searchQuery.trim(), userCoords, 'Showing turfs closest to you', showAvailableOnly);
+  }
+
+  async function handleAvailableOnlyChange(event) {
+    const checked = event.target.checked;
+    setShowAvailableOnly(checked);
+    await loadTurfs(searchQuery.trim(), userCoords, locationStatus, checked);
   }
 
   function handleUseCurrentLocation(options = {}) {
@@ -198,12 +187,12 @@ const TurfListing = () => {
 
     const query = finalQuery.trim();
     if (!query) {
-      await loadTurfs('', userCoords, '');
+      await loadTurfs('', userCoords, '', showAvailableOnly);
       return;
     }
 
     const status = `Showing results for "${query}"`;
-    await loadTurfs(query, userCoords, status);
+    await loadTurfs(query, userCoords, status, showAvailableOnly);
   }
 
   if (loading) {
@@ -268,10 +257,10 @@ const TurfListing = () => {
         <div className="controls">
           <div className="filter-section">
             <label className="filter-checkbox">
-              <input 
-                type="checkbox" 
-                checked={showAvailableOnly} 
-                onChange={handleAvailabilityFilterChange} 
+              <input
+                type="checkbox"
+                checked={showAvailableOnly}
+                onChange={handleAvailableOnlyChange}
               />
               Show only available turfs
             </label>

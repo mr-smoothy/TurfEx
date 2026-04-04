@@ -117,7 +117,7 @@ backendip/
 ### Service Layer
 - Implement business logic
 - Enforce business rules
-- Manage transactions
+- Manage booking confirmation state
 - Call repository layer
 - Transform entities to DTOs
 

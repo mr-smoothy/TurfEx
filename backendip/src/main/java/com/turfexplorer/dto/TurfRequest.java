@@ -25,6 +25,8 @@ public class TurfRequest {
     
     private String imageUrl;
 
+    private Boolean available;
+
     @NotNull(message = "Latitude is required")
     private Double latitude;
 

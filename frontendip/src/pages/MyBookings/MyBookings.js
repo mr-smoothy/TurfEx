@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getMyBookings, cancelBooking, initPayment } from '../../services/bookingService';
+import { getMyBookings, cancelBooking, confirmBooking } from '../../services/bookingService';
 import './MyBookings.css';
 
 const MyBookings = () => {
@@ -37,7 +37,7 @@ const MyBookings = () => {
 
   function shouldShowPayNowButton(booking) {
     const paymentStatus = booking.paymentStatus;
-    const isAlreadyPaid = paymentStatus === 'SUCCESS' || paymentStatus === 'PARTIAL' || paymentStatus === 'FULL';
+    const isAlreadyPaid = paymentStatus === 'PAID';
     const isCancelled = booking.status === 'CANCELLED';
 
     if (isAlreadyPaid) {
@@ -51,9 +51,9 @@ const MyBookings = () => {
 
   function getPayButtonText(bookingId) {
     if (payingBookingId === bookingId) {
-      return 'Redirecting...';
+      return 'Confirming...';
     }
-    return 'Pay 50% to Confirm';
+    return 'Pay to Confirm';
   }
 
   useEffect(function() {
@@ -94,20 +94,12 @@ const MyBookings = () => {
   }
 
   async function handlePayNow(booking) {
-    if (!booking.bookingDate || !booking.turfId || !booking.slotId || !booking.price) {
-      alert('Payment details are incomplete for this booking. Please book from turf details again.');
-      return;
-    }
-
     setPayingBookingId(booking.id);
     try {
-      const payment = await initPayment(booking.turfId, booking.slotId, booking.price, booking.bookingDate);
-      if (!payment.gatewayPageURL) {
-        throw new Error('Missing gateway URL');
-      }
-      window.location.href = payment.gatewayPageURL;
+      await confirmBooking(booking.id);
+      await loadUserBookings();
     } catch (err) {
-      alert(getErrorMessage(err, 'Failed to start payment. Please try again.'));
+      alert(getErrorMessage(err, 'Failed to confirm booking. Please try again.'));
     } finally {
       setPayingBookingId(null);
     }
@@ -199,29 +191,6 @@ const MyBookings = () => {
                     </span>
                   </div>
 
-                  {booking.totalAmount !== undefined && booking.totalAmount !== null && (
-                    <div className="detail-item">
-                      <span className="detail-icon">🧾</span>
-                      <span className="detail-label">Total:</span>
-                      <span className="detail-value">৳{booking.totalAmount}</span>
-                    </div>
-                  )}
-
-                  {booking.paidAmount !== undefined && booking.paidAmount !== null && (
-                    <div className="detail-item">
-                      <span className="detail-icon">✅</span>
-                      <span className="detail-label">Paid:</span>
-                      <span className="detail-value">৳{booking.paidAmount}</span>
-                    </div>
-                  )}
-
-                  {booking.dueAmount !== undefined && booking.dueAmount !== null && booking.dueAmount > 0 && (
-                    <div className="detail-item">
-                      <span className="detail-icon">⏳</span>
-                      <span className="detail-label">Due:</span>
-                      <span className="detail-value">৳{booking.dueAmount}</span>
-                    </div>
-                  )}
                 </div>
               </div>
 
