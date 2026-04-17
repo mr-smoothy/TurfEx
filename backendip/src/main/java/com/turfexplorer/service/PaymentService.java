@@ -1,17 +1,9 @@
 package com.turfexplorer.service;
 
-import com.stripe.Stripe;
-import com.stripe.exception.SignatureVerificationException;
-import com.stripe.exception.StripeException;
-import com.stripe.model.Event;
-import com.stripe.model.checkout.Session;
-import com.stripe.net.Webhook;
-import com.stripe.param.checkout.SessionCreateParams;
-import com.turfexplorer.dto.PaymentCreateSessionResponse;
-import com.turfexplorer.dto.PaymentSuccessResponse;
 import com.turfexplorer.entity.Booking;
 import com.turfexplorer.entity.Slot;
 import com.turfexplorer.entity.Transaction;
+import com.turfexplorer.entity.User;
 import com.turfexplorer.enums.BookingStatus;
 import com.turfexplorer.enums.TransactionStatus;
 import com.turfexplorer.exception.BadRequestException;
@@ -19,17 +11,26 @@ import com.turfexplorer.exception.ResourceNotFoundException;
 import com.turfexplorer.repository.BookingRepository;
 import com.turfexplorer.repository.SlotRepository;
 import com.turfexplorer.repository.TransactionRepository;
+import com.turfexplorer.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 public class PaymentService {
@@ -45,23 +46,41 @@ public class PaymentService {
     @Autowired
     private TransactionRepository transactionRepository;
 
-    @Value("${stripe.secret.key:}")
-    private String stripeSecretKey;
+    @Autowired
+    private UserRepository userRepository;
 
-    @Value("${stripe.webhook.secret:}")
-    private String stripeWebhookSecret;
+    @Autowired
+    private RestTemplate restTemplate;
 
-    @Value("${stripe.currency:bdt}")
-    private String stripeCurrency;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Value("${bkash.app.key:}")
+    private String bkashAppKey;
+
+    @Value("${bkash.app.secret:}")
+    private String bkashAppSecret;
+
+    @Value("${bkash.username:}")
+    private String bkashUsername;
+
+    @Value("${bkash.password:}")
+    private String bkashPassword;
+
+    @Value("${bkash.base.url:}")
+    private String bkashBaseUrl;
 
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
+    @Value("${bkash.default.payer.reference:01770618575}")
+    private String defaultPayerReference;
+
+    private volatile boolean transactionSchemaChecked = false;
+
     @Transactional
-    public PaymentCreateSessionResponse createCheckoutSession(Long userId, Long bookingId) {
-        log.info("Stripe checkout session request received for bookingId={} userId={}", bookingId, userId);
-        ensureStripeSecretConfigured();
-        log.info("Stripe API key configured: {}", maskSecret(stripeSecretKey));
+    public Map<String, Object> createBkashPayment(Long userId, Long bookingId) {
+        validateBkashConfig();
 
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
@@ -81,133 +100,129 @@ public class PaymentService {
         Slot slot = slotRepository.findById(booking.getSlotId())
                 .orElseThrow(() -> new ResourceNotFoundException("Slot not found"));
 
-        Stripe.apiKey = stripeSecretKey;
+        if (slot.getPrice() == null) {
+            throw new BadRequestException("Slot price is missing");
+        }
 
-        try {
-            double bookingAmount = slot.getPrice();
-            long amountInMinorUnit = BigDecimal.valueOf(bookingAmount)
-                .multiply(BigDecimal.valueOf(100L))
-                .setScale(0, RoundingMode.HALF_UP)
-                .longValue();
-            String amountAsText = BigDecimal.valueOf(bookingAmount)
+        double amount = slot.getPrice();
+        String amountAsString = BigDecimal.valueOf(amount)
                 .setScale(2, RoundingMode.HALF_UP)
                 .toPlainString();
 
-            log.info("Stripe amount conversion bookingId={} amountBDT={} amountMinorUnit={} currency={}",
-                booking.getId(), amountAsText, amountInMinorUnit, stripeCurrency);
-            log.info("Creating Stripe checkout session for bookingId={} amount={} currency={} successUrl={} cancelUrl={}",
-                booking.getId(), amountInMinorUnit, stripeCurrency,
-            frontendUrl + "/success?session_id={CHECKOUT_SESSION_ID}",
-                frontendUrl + "/payment-failed?bookingId=" + booking.getId());
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String payerReference = buildPayerReference(user.getPhone());
 
-            SessionCreateParams params = SessionCreateParams.builder()
-                    .setMode(SessionCreateParams.Mode.PAYMENT)
-                .setSuccessUrl(frontendUrl + "/success?session_id={CHECKOUT_SESSION_ID}")
-                    .setCancelUrl(frontendUrl + "/payment-failed?bookingId=" + booking.getId())
-                .putMetadata("booking_id", booking.getId().toString())
-                .putMetadata("amount", amountAsText)
-                    .addLineItem(
-                            SessionCreateParams.LineItem.builder()
-                                    .setQuantity(1L)
-                                    .setPriceData(
-                                            SessionCreateParams.LineItem.PriceData.builder()
-                                .setCurrency(stripeCurrency.toLowerCase())
-                                                    .setUnitAmount(amountInMinorUnit)
-                                                    .setProductData(
-                                                            SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                                                    .setName("Turf Booking")
-                                                                    .build()
-                                                    )
-                                                    .build()
-                                    )
-                                    .build()
-                    )
-                    .build();
+        String token = grantToken();
+        Map<String, Object> createResponse = createPayment(token, booking.getId(), amountAsString, payerReference);
+        log.info("bKash create payment raw response for bookingId={}: {}", booking.getId(), createResponse);
 
-            Session session = Session.create(params);
-
-            Transaction transaction = new Transaction();
-            transaction.setBookingId(booking.getId());
-            transaction.setAmount(bookingAmount);
-            transaction.setStatus(TransactionStatus.PENDING);
-            transaction.setStripeSessionId(session.getId());
-            transactionRepository.save(transaction);
-
-            log.info("Stripe checkout session created successfully for bookingId={} sessionId={}", booking.getId(), session.getId());
-            return new PaymentCreateSessionResponse(session.getUrl());
-        } catch (StripeException ex) {
-            log.error("Stripe checkout session creation failed for bookingId={} userId={}: {}", bookingId, userId, ex.getMessage(), ex);
-            throw new BadRequestException("Failed to create Stripe checkout session: " + ex.getMessage());
+        String statusCode = getFirstNonBlank(createResponse, "statusCode", "status_code");
+        String statusMessage = getFirstNonBlank(createResponse, "statusMessage", "status_message", "message");
+        if (StringUtils.hasText(statusCode) && !"0000".equals(statusCode)) {
+            throw new BadRequestException("bKash create payment failed [" + statusCode + "]: "
+                    + (StringUtils.hasText(statusMessage) ? statusMessage : "Unknown error"));
         }
+
+        String paymentId = getFirstNonBlank(createResponse, "paymentID", "paymentId", "paymentid");
+        String bkashUrl = getFirstNonBlank(createResponse, "bkashURL", "bkashUrl", "bkashurl");
+
+        if (!StringUtils.hasText(paymentId)) {
+            throw new BadRequestException("bKash create payment did not return paymentID. Response: " + createResponse);
+        }
+
+        if (!StringUtils.hasText(bkashUrl)) {
+            throw new BadRequestException("bKash create payment did not return bkashURL. Response: " + createResponse);
+        }
+
+        Transaction transaction = new Transaction();
+        transaction.setBookingId(booking.getId());
+        transaction.setAmount(amount);
+        transaction.setStatus(TransactionStatus.PENDING);
+        transaction.setPaymentId(paymentId);
+        try {
+            ensureTransactionSchemaCompatible();
+            Transaction existing = transactionRepository.findByPaymentId(paymentId).orElse(null);
+            if (existing != null) {
+                existing.setBookingId(booking.getId());
+                existing.setAmount(amount);
+                existing.setStatus(TransactionStatus.PENDING);
+                transactionRepository.save(existing);
+            } else {
+                transactionRepository.save(transaction);
+            }
+        } catch (Exception ex) {
+            log.error("Failed to save transaction for bookingId={} paymentId={}", booking.getId(), paymentId, ex);
+            String cause = ex.getMessage();
+            if (ex.getCause() != null && ex.getCause().getMessage() != null) {
+                cause = ex.getCause().getMessage();
+            }
+            throw new BadRequestException("Failed to save payment transaction: " + cause);
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("bkashURL", bkashUrl);
+        response.put("paymentID", paymentId);
+        return response;
     }
 
     @Transactional
-    public void handleWebhook(String payload, String signatureHeader) {
-        ensureStripeSecretConfigured();
+    public Map<String, Object> executeBkashPayment(Long userId, String paymentId) {
+        validateBkashConfig();
 
-        if (!StringUtils.hasText(stripeWebhookSecret)) {
-            throw new BadRequestException("Stripe webhook secret is not configured");
+        if (!StringUtils.hasText(paymentId)) {
+            throw new BadRequestException("paymentID is required");
         }
 
-        Event event;
-        try {
-            event = Webhook.constructEvent(payload, signatureHeader, stripeWebhookSecret);
-        } catch (SignatureVerificationException ex) {
-            throw new BadRequestException("Invalid Stripe webhook signature");
-        }
-
-        if (!"checkout.session.completed".equals(event.getType())) {
-            return;
-        }
-
-        Session session = (Session) event.getDataObjectDeserializer()
-                .getObject()
-                .orElseThrow(() -> new BadRequestException("Could not deserialize Stripe session"));
-
-        markPaymentSuccess(session.getId());
-    }
-
-    private void ensureStripeSecretConfigured() {
-        if (!StringUtils.hasText(stripeSecretKey)) {
-            throw new BadRequestException("Stripe secret key is not configured");
-        }
-        if (!stripeSecretKey.startsWith("sk_test_") && !stripeSecretKey.startsWith("sk_live_")) {
-            log.warn("Stripe secret key does not use a standard Stripe prefix");
-        }
-    }
-
-    private String maskSecret(String secret) {
-        if (!StringUtils.hasText(secret)) {
-            return "<empty>";
-        }
-        int visiblePrefix = Math.min(8, secret.length());
-        int visibleSuffix = Math.min(4, Math.max(secret.length() - visiblePrefix, 0));
-        if (secret.length() <= visiblePrefix + visibleSuffix) {
-            return secret.charAt(0) + "***" + secret.charAt(secret.length() - 1);
-        }
-        return secret.substring(0, visiblePrefix) + "..." + secret.substring(secret.length() - visibleSuffix);
-    }
-
-    private Transaction markPaymentSuccess(String stripeSessionId) {
-        Transaction transaction = transactionRepository.findByStripeSessionId(stripeSessionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found for Stripe session"));
-
-        log.info("Found transaction for success handling: id={} bookingId={} amount={} status={} sessionId={}",
-                transaction.getId(), transaction.getBookingId(), transaction.getAmount(), transaction.getStatus(), stripeSessionId);
-
-        if (transaction.getStatus() == TransactionStatus.SUCCESS) {
-            return transaction;
-        }
+        Transaction transaction = transactionRepository.findByPaymentId(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Transaction not found for this paymentID"));
 
         Booking booking = bookingRepository.findById(transaction.getBookingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found for transaction"));
 
+        if (!booking.getUserId().equals(userId)) {
+            throw new BadRequestException("You can only execute payment for your own bookings");
+        }
+
+        if (transaction.getStatus() == TransactionStatus.SUCCESS) {
+            return buildExecuteResponse(transaction, booking, paymentId, "ALREADY_EXECUTED");
+        }
+
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             transaction.setStatus(TransactionStatus.FAILED);
             transactionRepository.save(transaction);
-            return transaction;
+            throw new BadRequestException("Booking is cancelled. Payment cannot be executed");
         }
 
+        String token = grantToken();
+        Map<String, Object> executeResponse = executePayment(token, paymentId);
+
+        String transactionStatus = asString(executeResponse.get("transactionStatus"));
+        String statusCode = asString(executeResponse.get("statusCode"));
+
+        if ("Completed".equalsIgnoreCase(transactionStatus) || "0000".equals(statusCode)) {
+            markPaymentSuccess(transaction, booking);
+            return buildExecuteResponse(transaction, booking, paymentId, "SUCCESS");
+        }
+
+        transaction.setStatus(TransactionStatus.FAILED);
+        transactionRepository.save(transaction);
+
+        String statusMessage = asString(executeResponse.get("statusMessage"));
+        throw new BadRequestException("bKash execute failed: " + (StringUtils.hasText(statusMessage) ? statusMessage : "Payment not completed"));
+    }
+
+    private Map<String, Object> buildExecuteResponse(Transaction transaction, Booking booking, String paymentId, String result) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("result", result);
+        response.put("paymentID", paymentId);
+        response.put("amount", transaction.getAmount());
+        response.put("transactionStatus", transaction.getStatus().name());
+        response.put("bookingStatus", booking.getStatus().name());
+        return response;
+    }
+
+    private void markPaymentSuccess(Transaction transaction, Booking booking) {
         boolean slotAlreadyConfirmedByAnotherBooking = bookingRepository
                 .findBySlotIdAndBookingDateAndStatus(booking.getSlotId(), booking.getBookingDate(), BookingStatus.CONFIRMED)
                 .filter(existing -> !existing.getId().equals(booking.getId()))
@@ -216,7 +231,7 @@ public class PaymentService {
         if (slotAlreadyConfirmedByAnotherBooking) {
             transaction.setStatus(TransactionStatus.FAILED);
             transactionRepository.save(transaction);
-            return transaction;
+            throw new BadRequestException("Slot already confirmed by another booking");
         }
 
         booking.setStatus(BookingStatus.CONFIRMED);
@@ -224,39 +239,193 @@ public class PaymentService {
 
         transaction.setStatus(TransactionStatus.SUCCESS);
         transactionRepository.save(transaction);
-
-        log.info("Payment confirmed successfully for stripeSessionId={} bookingId={}", stripeSessionId, booking.getId());
-        return transaction;
     }
 
-    @Transactional
-    public PaymentSuccessResponse confirmPaymentSuccess(String stripeSessionId) {
-        log.info("Payment success confirmation received from frontend for sessionId={}", stripeSessionId);
+    private String grantToken() {
+        String url = normalizeBaseUrl() + "/checkout/token/grant";
 
-        if (!StringUtils.hasText(stripeSessionId)) {
-            log.error("Empty or null sessionId provided to confirmPaymentSuccess");
-            throw new BadRequestException("Session ID is required");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("username", bkashUsername);
+        headers.set("password", bkashPassword);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("app_key", bkashAppKey);
+        body.put("app_secret", bkashAppSecret);
+
+        Map<String, Object> payload = postForMap(url, headers, body, "grant token");
+        String idToken = asString(payload.get("id_token"));
+
+        if (!StringUtils.hasText(idToken)) {
+            throw new BadRequestException("bKash token grant response missing id_token");
         }
 
-        Transaction transaction = transactionRepository.findByStripeSessionId(stripeSessionId)
-                .orElseThrow(() -> {
-                    log.error("Transaction not found for stripeSessionId={}", stripeSessionId);
-                    return new ResourceNotFoundException("Transaction not found for this payment session");
-                });
+        return idToken;
+    }
 
-        log.info("Found transaction: id={} bookingId={} status={}", transaction.getId(), transaction.getBookingId(), transaction.getStatus());
+    private Map<String, Object> createPayment(String idToken, Long bookingId, String amountAsString, String payerReference) {
+        String url = normalizeBaseUrl() + "/checkout/create";
 
-        if (transaction.getStatus() == TransactionStatus.SUCCESS) {
-            log.info("Transaction already marked as SUCCESS for sessionId={}, skipping", stripeSessionId);
-            Booking existingBooking = bookingRepository.findById(transaction.getBookingId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Booking not found for transaction"));
-            return new PaymentSuccessResponse(transaction.getAmount(), transaction.getStatus().name(), existingBooking.getStatus().name());
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", idToken);
+        headers.set("X-APP-Key", bkashAppKey);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("mode", "0011");
+        body.put("amount", amountAsString);
+        body.put("currency", "BDT");
+        body.put("intent", "sale");
+        body.put("payerReference", payerReference);
+        body.put("merchantInvoiceNumber", String.valueOf(bookingId));
+        body.put("callbackURL", "http://localhost:3000/payment-success");
+
+        return postForMap(url, headers, body, "create payment");
+    }
+
+    private Map<String, Object> executePayment(String idToken, String paymentId) {
+        String url = normalizeBaseUrl() + "/checkout/execute";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("Authorization", idToken);
+        headers.set("X-APP-Key", bkashAppKey);
+
+        Map<String, String> body = new HashMap<>();
+        body.put("paymentID", paymentId);
+
+        return postForMap(url, headers, body, "execute payment");
+    }
+
+    private Map<String, Object> postForMap(String url, HttpHeaders headers, Map<String, String> body, String operation) {
+        try {
+            HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+
+            if (response.getBody() == null) {
+                throw new BadRequestException("bKash " + operation + " returned empty response");
+            }
+
+            return response.getBody();
+        } catch (HttpStatusCodeException ex) {
+            log.error("bKash {} failed. status={} body={}", operation, ex.getStatusCode(), ex.getResponseBodyAsString());
+            throw new BadRequestException("bKash " + operation + " failed: " + ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            log.error("bKash {} failed: {}", operation, ex.getMessage(), ex);
+            throw new BadRequestException("bKash " + operation + " failed: " + ex.getMessage());
+        }
+    }
+
+    private String normalizeBaseUrl() {
+        String url = bkashBaseUrl;
+        if (!StringUtils.hasText(url)) {
+            throw new BadRequestException("bKash base url is not configured");
+        }
+        while (url.endsWith("/")) {
+            url = url.substring(0, url.length() - 1);
+        }
+        return url;
+    }
+
+    private void validateBkashConfig() {
+        if (!StringUtils.hasText(bkashAppKey)) {
+            throw new BadRequestException("bKash app key is not configured");
+        }
+        if (!StringUtils.hasText(bkashAppSecret)) {
+            throw new BadRequestException("bKash app secret is not configured");
+        }
+        if (!StringUtils.hasText(bkashUsername)) {
+            throw new BadRequestException("bKash username is not configured");
+        }
+        if (!StringUtils.hasText(bkashPassword)) {
+            throw new BadRequestException("bKash password is not configured");
+        }
+        if (!StringUtils.hasText(bkashBaseUrl)) {
+            throw new BadRequestException("bKash base url is not configured");
+        }
+    }
+
+    private String asString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return String.valueOf(value);
+    }
+
+    private String buildPayerReference(String phone) {
+        if (StringUtils.hasText(phone)) {
+            String digits = phone.replaceAll("\\D", "");
+            if (digits.startsWith("880") && digits.length() == 13) {
+                digits = "0" + digits.substring(3);
+            } else if (digits.startsWith("88") && digits.length() == 13) {
+                digits = "0" + digits.substring(2);
+            }
+
+            if (digits.matches("01\\d{9}")) {
+                return digits;
+            }
         }
 
-        Transaction updatedTransaction = markPaymentSuccess(stripeSessionId);
-        Booking updatedBooking = bookingRepository.findById(updatedTransaction.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found for transaction"));
-        log.info("Payment confirmation completed for sessionId={}", stripeSessionId);
-        return new PaymentSuccessResponse(updatedTransaction.getAmount(), updatedTransaction.getStatus().name(), updatedBooking.getStatus().name());
+        return defaultPayerReference;
+    }
+
+    private synchronized void ensureTransactionSchemaCompatible() {
+        if (transactionSchemaChecked) {
+            return;
+        }
+
+        Integer stripeColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns " +
+                        "WHERE table_schema = DATABASE() AND table_name = 'transactions' AND column_name = 'stripe_session_id'",
+                Integer.class
+        );
+
+        Integer paymentColumnCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.columns " +
+                        "WHERE table_schema = DATABASE() AND table_name = 'transactions' AND column_name = 'payment_id'",
+                Integer.class
+        );
+
+        boolean hasStripeColumn = stripeColumnCount != null && stripeColumnCount > 0;
+        boolean hasPaymentColumn = paymentColumnCount != null && paymentColumnCount > 0;
+
+        if (!hasStripeColumn && hasPaymentColumn) {
+            log.warn("transactions.stripe_session_id missing; applying compatibility migration from payment_id");
+            executeDdlSafely("ALTER TABLE transactions ADD COLUMN stripe_session_id VARCHAR(255) NULL");
+            executeDdlSafely("UPDATE transactions SET stripe_session_id = payment_id WHERE stripe_session_id IS NULL");
+            executeDdlSafely("ALTER TABLE transactions MODIFY stripe_session_id VARCHAR(255) NOT NULL");
+            executeDdlSafely("CREATE UNIQUE INDEX ux_transactions_stripe_session_id ON transactions(stripe_session_id)");
+        }
+
+        if (hasStripeColumn && !hasPaymentColumn) {
+            log.warn("transactions.payment_id missing; applying compatibility migration from stripe_session_id");
+            executeDdlSafely("ALTER TABLE transactions ADD COLUMN payment_id VARCHAR(255) NULL");
+            executeDdlSafely("UPDATE transactions SET payment_id = stripe_session_id WHERE payment_id IS NULL");
+            executeDdlSafely("ALTER TABLE transactions MODIFY payment_id VARCHAR(255) NOT NULL");
+            executeDdlSafely("CREATE UNIQUE INDEX ux_transactions_payment_id ON transactions(payment_id)");
+        }
+
+        transactionSchemaChecked = true;
+    }
+
+    private void executeDdlSafely(String sql) {
+        try {
+            jdbcTemplate.execute(sql);
+        } catch (Exception ex) {
+            log.debug("Ignoring schema compatibility SQL failure for [{}]: {}", sql, ex.getMessage());
+        }
+    }
+
+    private String getFirstNonBlank(Map<String, Object> payload, String... keys) {
+        if (payload == null || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            String value = asString(payload.get(key));
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 }

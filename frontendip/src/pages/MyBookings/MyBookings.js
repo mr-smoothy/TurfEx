@@ -136,11 +136,11 @@ const MyBookings = () => {
     try {
       localStorage.setItem('pendingPaymentBookingId', String(booking.id));
       const session = await createPaymentSession(booking.id);
-      if (!session || !session.url) {
-        throw new Error('Checkout URL not found');
+      if (!session || !session.bkashURL) {
+        throw new Error('bKash URL not found');
       }
 
-      window.location.href = session.url;
+      window.location.href = session.bkashURL;
     } catch (err) {
       localStorage.removeItem('pendingPaymentBookingId');
       showError(getErrorMessage(err, 'Failed to start payment. Please try again.'));

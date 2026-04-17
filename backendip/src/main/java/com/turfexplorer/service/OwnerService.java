@@ -262,10 +262,7 @@ public class OwnerService {
         response.setSlotId(booking.getSlotId());
         response.setBookingDate(booking.getBookingDate());
         response.setStatus(booking.getStatus().name());
-        TransactionStatus transactionStatus = transactionRepository
-            .findTopByBookingIdOrderByIdDesc(booking.getId())
-            .map(Transaction::getStatus)
-            .orElse(TransactionStatus.PENDING);
+        TransactionStatus transactionStatus = resolveTransactionStatus(booking.getId());
         response.setTransactionStatus(transactionStatus.name());
         response.setPaymentStatus(mapPaymentStatus(transactionStatus));
         response.setCreatedAt(booking.getCreatedAt());
@@ -281,6 +278,19 @@ public class OwnerService {
         }
 
         return response;
+    }
+
+    private TransactionStatus resolveTransactionStatus(Long bookingId) {
+        return transactionRepository
+            .findFirstByBookingIdAndStatusOrderByIdDesc(bookingId, TransactionStatus.SUCCESS)
+            .map(Transaction::getStatus)
+            .orElseGet(() -> transactionRepository
+                .findFirstByBookingIdAndStatusOrderByIdDesc(bookingId, TransactionStatus.FAILED)
+                .map(Transaction::getStatus)
+                .orElseGet(() -> transactionRepository
+                    .findTopByBookingIdOrderByIdDesc(bookingId)
+                    .map(Transaction::getStatus)
+                    .orElse(TransactionStatus.PENDING)));
     }
 
     private String mapPaymentStatus(TransactionStatus transactionStatus) {

@@ -29,9 +29,23 @@ public class Transaction {
     @Column(nullable = false)
     private TransactionStatus status = TransactionStatus.PENDING;
 
-    @Column(name = "stripe_session_id", nullable = false, unique = true)
+    @Column(name = "payment_id", nullable = false, unique = true)
+    private String paymentId;
+
+    @Column(name = "stripe_session_id")
     private String stripeSessionId;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @PrePersist
+    @PreUpdate
+    public void syncPaymentColumns() {
+        if ((paymentId == null || paymentId.isBlank()) && stripeSessionId != null && !stripeSessionId.isBlank()) {
+            paymentId = stripeSessionId;
+        }
+        if ((stripeSessionId == null || stripeSessionId.isBlank()) && paymentId != null && !paymentId.isBlank()) {
+            stripeSessionId = paymentId;
+        }
+    }
 }

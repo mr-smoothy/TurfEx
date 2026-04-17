@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Header from './components/Header/Header';
 import Footer from './components/Footer/Footer';
 import Home from './pages/Home/Home';
@@ -20,6 +20,16 @@ import PaymentSuccess from './pages/PaymentSuccess/PaymentSuccess';
 import PaymentFailed from './pages/PaymentFailed/PaymentFailed';
 import { isLoggedIn, isAdmin, isOwner } from './services/authService';
 import './App.css';
+
+function ScrollToTopOnRouteChange() {
+  const location = useLocation();
+
+  React.useEffect(function() {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  return null;
+}
 
 // Redirects to /login if not authenticated
 function PrivateRoute({ children }) {
@@ -53,6 +63,7 @@ function UserBookingRoute({ children }) {
 function App() {
   return (
     <div className="App">
+      <ScrollToTopOnRouteChange />
       <Header />
       <main className="main-content">
         <Routes>

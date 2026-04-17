@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getMyBookings } from '../../services/bookingService';
-import api from '../../services/api';
+import { executeBkashPayment } from '../../services/paymentService';
 import { useNotification } from '../../context/NotificationContext';
 import './PaymentResult.css';
 
@@ -9,6 +9,7 @@ const PaymentSuccess = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { showError, showSuccess } = useNotification();
+  const executeStartedRef = useRef(false);
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmationError, setConfirmationError] = useState(null);
@@ -25,31 +26,49 @@ const PaymentSuccess = () => {
 
       try {
         const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get('session_id');
-        console.log('PaymentSuccess: Received sessionId from URL:', sessionId);
+        const paymentId = urlParams.get('paymentID');
+        const status = urlParams.get('status');
+        const pendingBookingId = localStorage.getItem('pendingPaymentBookingId');
+        console.log('PaymentSuccess: Received paymentID from URL:', paymentId);
 
-        if (!sessionId) {
-          console.error('PaymentSuccess: session_id is missing from URL');
-          setConfirmationError('Payment session ID is missing. Please contact support.');
-          showError('Payment session ID is missing. Please contact support.');
+        if (!paymentId) {
+          console.error('PaymentSuccess: paymentID is missing from URL');
+          setConfirmationError('Payment ID is missing. Please contact support.');
+          showError('Payment ID is missing. Please contact support.');
           setLoading(false);
           return;
         }
 
-        // Step 1: Confirm payment with backend
-        console.log('PaymentSuccess: Calling backend to confirm payment for sessionId:', sessionId);
-        const response = await api.post('http://localhost:8080/api/payment/success', null, {
-          params: { session_id: sessionId }
-        });
-        console.log('PaymentSuccess: Backend confirmation status:', response.status);
-        console.log('PaymentSuccess: Backend confirmation payload:', response.data);
-        setPaidAmount(response.data && response.data.amount != null ? Number(response.data.amount) : null);
+        if (status && status.toLowerCase() !== 'success') {
+          const query = new URLSearchParams();
+          query.set('status', status);
+          if (paymentId) {
+            query.set('paymentID', paymentId);
+          }
+          if (pendingBookingId) {
+            query.set('bookingId', pendingBookingId);
+          }
+          navigate('/payment-failed?' + query.toString(), { replace: true });
+          return;
+        }
+
+        if (executeStartedRef.current) {
+          console.log('PaymentSuccess: execution already started for paymentID:', paymentId);
+          return;
+        }
+
+        executeStartedRef.current = true;
+
+        // Step 1: Execute payment in backend
+        console.log('PaymentSuccess: Calling backend to execute payment for paymentID:', paymentId);
+        const response = await executeBkashPayment(paymentId);
+        console.log('PaymentSuccess: Backend confirmation payload:', response);
+        setPaidAmount(response && response.amount != null ? Number(response.amount) : null);
         console.log('PaymentSuccess: Backend confirmation successful');
         setConfirmationSuccess(true);
         showSuccess('Payment successful and confirmed.');
 
         // Step 2: Load booking from localStorage or fetch all bookings
-        const pendingBookingId = localStorage.getItem('pendingPaymentBookingId');
         console.log('PaymentSuccess: pendingBookingId from localStorage:', pendingBookingId);
 
         if (!pendingBookingId) {
@@ -102,6 +121,7 @@ const PaymentSuccess = () => {
           setConfirmationError(errorMsg);
           showError(errorMsg);
           setLoading(false);
+          executeStartedRef.current = false;
         }
       }
     }
@@ -120,16 +140,16 @@ const PaymentSuccess = () => {
     return value.charAt(0) + value.slice(1).toLowerCase();
   }
 
-  const sessionId = searchParams.get('session_id');
+  const paymentId = searchParams.get('paymentID');
 
   return (
     <div className="payment-result-page">
       <div className="payment-result-card success">
         <h1>Payment Successful</h1>
-        <p>Your payment was completed in Stripe.</p>
+        <p>Your payment was completed in bKash.</p>
 
-        {sessionId && (
-          <p className="payment-session-text">Stripe Session: {sessionId}</p>
+        {paymentId && (
+          <p className="payment-session-text">bKash Payment ID: {paymentId}</p>
         )}
 
         {confirmationError && (

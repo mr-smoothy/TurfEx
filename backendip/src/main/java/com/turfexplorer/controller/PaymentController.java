@@ -1,9 +1,7 @@
 package com.turfexplorer.controller;
 
-import com.turfexplorer.dto.MessageResponse;
 import com.turfexplorer.dto.PaymentCreateSessionRequest;
-import com.turfexplorer.dto.PaymentCreateSessionResponse;
-import com.turfexplorer.dto.PaymentSuccessResponse;
+import com.turfexplorer.exception.BadRequestException;
 import com.turfexplorer.security.UserDetailsServiceImpl;
 import com.turfexplorer.service.PaymentService;
 import jakarta.validation.Valid;
@@ -12,18 +10,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/payment")
 public class PaymentController {
-
-    private static final Logger log = LoggerFactory.getLogger(PaymentController.class);
 
     @Autowired
     private PaymentService paymentService;
@@ -31,26 +25,32 @@ public class PaymentController {
     @Autowired
     private UserDetailsServiceImpl userDetailsService;
 
-    @PostMapping({"/create-session", "/create-checkout-session"})
-    public ResponseEntity<PaymentCreateSessionResponse> createCheckoutSession(
+    @PostMapping("/create-bkash-payment")
+    public ResponseEntity<Map<String, Object>> createBkashPayment(
             @Valid @RequestBody PaymentCreateSessionRequest request,
             Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new BadRequestException("Authentication is required for payment");
+        }
+        if (userDetailsService.getUserByEmail(authentication.getName()) == null) {
+            throw new BadRequestException("Authenticated user not found");
+        }
         Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
-        return ResponseEntity.ok(paymentService.createCheckoutSession(userId, request.getBookingId()));
+        return ResponseEntity.ok(paymentService.createBkashPayment(userId, request.getBookingId()));
     }
 
-    @PostMapping("/webhook")
-    public ResponseEntity<MessageResponse> handleWebhook(
-            @RequestBody String payload,
-            @RequestHeader("Stripe-Signature") String stripeSignature) {
-        paymentService.handleWebhook(payload, stripeSignature);
-        return ResponseEntity.ok(new MessageResponse("Webhook processed"));
-    }
-
-    @PostMapping("/success")
-    public ResponseEntity<PaymentSuccessResponse> confirmPaymentSuccess(
-            @RequestParam String session_id) {
-        log.info("Received payment success callback with session_id={}", session_id);
-        return ResponseEntity.ok(paymentService.confirmPaymentSuccess(session_id));
+    @PostMapping("/execute-bkash-payment")
+    public ResponseEntity<Map<String, Object>> executeBkashPayment(
+            @RequestBody Map<String, String> request,
+            Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new BadRequestException("Authentication is required for payment");
+        }
+        if (userDetailsService.getUserByEmail(authentication.getName()) == null) {
+            throw new BadRequestException("Authenticated user not found");
+        }
+        Long userId = userDetailsService.getUserByEmail(authentication.getName()).getId();
+        String paymentId = request.get("paymentID");
+        return ResponseEntity.ok(paymentService.executeBkashPayment(userId, paymentId));
     }
 }

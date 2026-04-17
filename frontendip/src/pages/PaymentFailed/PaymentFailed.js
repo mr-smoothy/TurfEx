@@ -11,13 +11,34 @@ const PaymentFailed = () => {
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  function getFailureContent() {
+    const rawStatus = (searchParams.get('status') || '').toLowerCase();
+    const isCancelled = rawStatus === 'cancel' || rawStatus === 'cancelled' || rawStatus === 'canceled';
+
+    if (isCancelled) {
+      return {
+        title: 'Payment Cancelled',
+        message: 'Payment cancelled. Your booking remains pending.',
+        notification: 'Payment cancelled. Your booking remains pending.'
+      };
+    }
+
+    return {
+      title: 'Payment Unsuccessful',
+      message: 'Payment unsuccessful. Your booking remains pending.',
+      notification: 'Payment unsuccessful. Your booking remains pending.'
+    };
+  }
+
+  const failureContent = getFailureContent();
+
   useEffect(function() {
     let isMounted = true;
 
     async function loadBookingStatus() {
       setLoading(true);
       try {
-        showInfo('Payment was not completed. Your booking remains pending.');
+        showInfo(failureContent.notification);
         const bookingIdFromQuery = searchParams.get('bookingId');
         const pendingBookingId = localStorage.getItem('pendingPaymentBookingId');
         const bookingId = Number(bookingIdFromQuery || pendingBookingId);
@@ -48,7 +69,7 @@ const PaymentFailed = () => {
     return function() {
       isMounted = false;
     };
-  }, [searchParams, showError, showInfo]);
+  }, [failureContent.notification, searchParams, showError, showInfo]);
 
   function formatStatus(value) {
     if (!value) {
@@ -60,8 +81,8 @@ const PaymentFailed = () => {
   return (
     <div className="payment-result-page">
       <div className="payment-result-card failed">
-        <h1>Payment Cancelled</h1>
-        <p>You left Stripe checkout before completing payment. Your booking remains pending.</p>
+        <h1>{failureContent.title}</h1>
+        <p>{failureContent.message}</p>
 
         {loading ? (
           <p className="payment-status-text">Checking booking status...</p>

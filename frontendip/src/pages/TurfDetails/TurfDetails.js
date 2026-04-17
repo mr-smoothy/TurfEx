@@ -115,10 +115,10 @@ const TurfDetails = () => {
     try {
       localStorage.setItem('pendingPaymentBookingId', String(bookedBooking.id));
       const session = await createPaymentSession(bookedBooking.id);
-      if (!session || !session.url) {
-        throw new Error('Checkout URL not found');
+      if (!session || !session.bkashURL) {
+        throw new Error('bKash URL not found');
       }
-      window.location.href = session.url;
+      window.location.href = session.bkashURL;
     } catch (err) {
       localStorage.removeItem('pendingPaymentBookingId');
       const msg = getErrorMessage(err, 'Failed to start payment. Please try again.');
@@ -361,7 +361,7 @@ const TurfDetails = () => {
                           onClick={handlePayNow}
                           disabled={paymentLoading}
                         >
-                          {paymentLoading ? 'Redirecting to Stripe...' : 'Pay Now'}
+                          {paymentLoading ? 'Redirecting to bKash...' : 'Pay Now'}
                         </button>
                         <button
                           className="btn btn-secondary"

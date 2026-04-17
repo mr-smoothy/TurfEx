@@ -64,9 +64,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGlobalException(Exception ex) {
         logger.error("Unexpected error occurred", ex);
+        String debugMessage = ex.getMessage();
+        if (debugMessage == null || debugMessage.trim().isEmpty()) {
+            debugMessage = "An internal server error occurred";
+        }
         ErrorResponse error = new ErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "An internal server error occurred",
+            debugMessage,
             LocalDateTime.now()
         );
         return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);

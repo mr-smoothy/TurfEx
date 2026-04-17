@@ -74,7 +74,7 @@ CREATE TABLE transactions (
     booking_id BIGINT NOT NULL,
     amount DECIMAL(10, 2) NOT NULL,
     status ENUM('PENDING', 'SUCCESS', 'FAILED') NOT NULL DEFAULT 'PENDING',
-    stripe_session_id VARCHAR(255) NOT NULL UNIQUE,
+    payment_id VARCHAR(255) NOT NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
     INDEX idx_transactions_booking (booking_id),
