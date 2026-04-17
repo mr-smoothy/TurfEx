@@ -5,10 +5,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useNotification } from '../../context/NotificationContext';
 import './Profile.css';
 
 const Profile = () => {
   const navigate = useNavigate();
+  const { showError, showInfo, showSuccess } = useNotification();
   
   // State variables
   const [isEditing, setIsEditing] = useState(false);  // Edit mode flag
@@ -23,13 +25,13 @@ const Profile = () => {
     const userRole = localStorage.getItem('userRole');
     
     if (!userEmail) {
-      alert('Please login first');
+      showInfo('Please login first');
       navigate('/login');
       return;
     }
     
     if (userRole === 'admin') {
-      alert('Admins do not have user profiles.');
+      showError('Admins do not have user profiles.');
       navigate('/admin');
       return;
     }
@@ -58,7 +60,7 @@ const Profile = () => {
     }
     
     fetchProfile();
-  }, [navigate]);
+  }, [navigate, showError, showInfo]);
 
   // Function to save profile changes
   async function handleSave(event) {
@@ -85,9 +87,9 @@ const Profile = () => {
       localStorage.setItem('user', JSON.stringify({ ...userObj, ...profileData }));
       
       setIsEditing(false);
-      alert('Profile updated successfully!');
+      showSuccess('Profile updated successfully!');
     } catch (err) {
-      alert('Failed to update profile. Please try again.');
+      showError('Failed to update profile. Please try again.');
     }
   }
 

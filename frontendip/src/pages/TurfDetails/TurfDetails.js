@@ -8,11 +8,13 @@ import { getTurfById, getTurfSlots } from '../../services/turfService';
 import { createBooking } from '../../services/bookingService';
 import { createPaymentSession } from '../../services/paymentService';
 import { isLoggedIn as checkLoggedIn, getRole } from '../../services/authService';
+import { useNotification } from '../../context/NotificationContext';
 import './TurfDetails.css';
 
 const TurfDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showError, showInfo, showSuccess } = useNotification();
 
   const [turf, setTurf] = useState(null);
   const [slots, setSlots] = useState([]);
@@ -73,20 +75,20 @@ const TurfDetails = () => {
 
   async function handleBooking() {
     if (!checkLoggedIn()) {
-      alert('Please login first to make a booking');
+      showInfo('Please login first to make a booking');
       navigate('/login');
       return;
     }
     if (isBookingRestrictedRole) {
-      alert('Admins and owners cannot book turfs.');
+      showError('Admins and owners cannot book turfs.');
       return;
     }
     if (!selectedDate) {
-      alert('Please select a date');
+      showInfo('Please select a date');
       return;
     }
     if (!selectedSlot) {
-      alert('Please select a time slot');
+      showInfo('Please select a time slot');
       return;
     }
 
@@ -94,9 +96,10 @@ const TurfDetails = () => {
     try {
       const createdBooking = await createBooking(turf.id, selectedSlot.id, selectedDate);
       setBookedBooking(createdBooking);
+      showSuccess('Booking created successfully. You can proceed to payment.');
     } catch (err) {
       const msg = getErrorMessage(err, 'Booking failed. The slot may already be taken.');
-      alert(msg);
+      showError(msg);
     } finally {
       setBookingLoading(false);
     }
@@ -104,7 +107,7 @@ const TurfDetails = () => {
 
   async function handlePayNow() {
     if (!bookedBooking || !bookedBooking.id) {
-      alert('Booking information not found. Please open My Bookings and try payment there.');
+      showInfo('Booking information not found. Please open My Bookings and try payment there.');
       return;
     }
 
@@ -119,7 +122,7 @@ const TurfDetails = () => {
     } catch (err) {
       localStorage.removeItem('pendingPaymentBookingId');
       const msg = getErrorMessage(err, 'Failed to start payment. Please try again.');
-      alert(msg);
+      showError(msg);
     } finally {
       setPaymentLoading(false);
     }

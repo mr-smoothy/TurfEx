@@ -5,10 +5,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { register } from '../../services/authService';
+import { useNotification } from '../../context/NotificationContext';
 import './Register.css';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { showError, showSuccess } = useNotification();
   
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -40,16 +42,19 @@ const Register = () => {
     
     if (password !== confirmPassword) {
       setError('Passwords do not match!');
+      showError('Passwords do not match!');
       return;
     }
 
     setLoading(true);
     try {
       await register(name, email, password, phone, address, role);
+      showSuccess('Signup successful. Please verify the OTP sent to your email.');
       navigate('/verify-otp', { state: { email } });
     } catch (err) {
       const msg = getRegisterErrorMessage(err);
       setError(msg);
+      showError(msg);
     } finally {
       setLoading(false);
     }

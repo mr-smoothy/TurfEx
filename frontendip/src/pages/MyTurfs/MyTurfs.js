@@ -6,10 +6,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyTurfs, deleteTurf, getTurfBookings, updateTurfAvailability } from '../../services/turfService';
 import { addSlot, deleteSlot, getSlotsByTurf, updateSlot } from '../../services/slotService';
+import { useNotification } from '../../context/NotificationContext';
 import './MyTurfs.css';
 
 const MyTurfs = () => {
   const navigate = useNavigate();
+  const { showError, showInfo, showSuccess } = useNotification();
 
   const [myTurfs, setMyTurfs] = useState([]);
   const [viewingBookings, setViewingBookings] = useState(null);
@@ -123,7 +125,7 @@ const MyTurfs = () => {
   useEffect(function() {
     const userRole = localStorage.getItem('userRole');
     if (!localStorage.getItem('userEmail')) {
-      alert('Please login first');
+      showInfo('Please login first');
       navigate('/login');
       return;
     }
@@ -132,7 +134,7 @@ const MyTurfs = () => {
       return;
     }
     loadMyTurfs();
-  }, [navigate]);
+  }, [navigate, showInfo]);
 
   async function loadMyTurfs() {
     setLoading(true);
@@ -152,7 +154,7 @@ const MyTurfs = () => {
       }
       setTurfBookings(bookingsMap);
     } catch (err) {
-      alert('Failed to load your turfs.');
+      showError('Failed to load your turfs.');
     } finally {
       setLoading(false);
     }
@@ -162,20 +164,20 @@ const MyTurfs = () => {
     if (!window.confirm('Are you sure you want to delete this turf?')) return;
     try {
       await deleteTurf(turfId);
-      alert('Turf deleted successfully!');
+      showSuccess('Turf deleted successfully!');
       loadMyTurfs();
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to delete turf.'));
+      showError(getApiErrorMessage(err, 'Failed to delete turf.'));
     }
   }
 
   async function handleAddSlot(turfId) {
     if (!slotForm.startTime || !slotForm.endTime) {
-      alert('Please enter start and end time.');
+      showInfo('Please enter start and end time.');
       return;
     }
     if (slotForm.price === '' || Number(slotForm.price) <= 0) {
-      alert('Please enter a valid slot price.');
+      showInfo('Please enter a valid slot price.');
       return;
     }
     setSlotLoading(true);
@@ -186,10 +188,10 @@ const MyTurfs = () => {
         price: parseFloat(slotForm.price)
       });
       setSlotForm({ startTime: '', endTime: '', price: '' });
-      alert('Slot added successfully!');
+      showSuccess('Slot added successfully!');
       await loadSlotsForTurf(turfId);
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to add slot.'));
+      showError(getApiErrorMessage(err, 'Failed to add slot.'));
     } finally {
       setSlotLoading(false);
     }
@@ -203,7 +205,7 @@ const MyTurfs = () => {
         return { ...prev, [turfId]: slots };
       });
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to load slots.'));
+      showError(getApiErrorMessage(err, 'Failed to load slots.'));
     } finally {
       setLoadingSlotsFor(null);
     }
@@ -242,7 +244,7 @@ const MyTurfs = () => {
 
   async function handleUpdateSlot(turfId, slotId) {
     if (!editSlotForm.startTime || !editSlotForm.endTime || editSlotForm.price === '') {
-      alert('Please fill start time, end time and price.');
+      showInfo('Please fill start time, end time and price.');
       return;
     }
 
@@ -254,9 +256,10 @@ const MyTurfs = () => {
         price: parseFloat(editSlotForm.price)
       });
       setEditingSlot(null);
+      showSuccess('Slot updated successfully!');
       await loadSlotsForTurf(turfId);
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to update slot.'));
+      showError(getApiErrorMessage(err, 'Failed to update slot.'));
     } finally {
       setSlotLoading(false);
     }
@@ -267,9 +270,10 @@ const MyTurfs = () => {
     try {
       await deleteSlot(slotId);
       setEditingSlot(null);
+      showSuccess('Slot deleted successfully!');
       await loadSlotsForTurf(turfId);
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to delete slot.'));
+      showError(getApiErrorMessage(err, 'Failed to delete slot.'));
     }
   }
 
@@ -284,8 +288,9 @@ const MyTurfs = () => {
           return existingTurf;
         });
       });
+      showSuccess(`Turf marked as ${updatedTurf.available ? 'available' : 'unavailable'}.`);
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to update turf availability.'));
+      showError(getApiErrorMessage(err, 'Failed to update turf availability.'));
     }
   }
 

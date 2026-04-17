@@ -4,10 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useNotification } from '../../context/NotificationContext';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { showError, showInfo, showSuccess } = useNotification();
 
   const [pendingTurfs, setPendingTurfs] = useState([]);
   const [approvedTurfs, setApprovedTurfs] = useState([]);
@@ -53,12 +55,12 @@ const AdminDashboard = () => {
     const isAdmin = localStorage.getItem('userRole') === 'admin';
     const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
     if (!isLoggedIn || !isAdmin) {
-      alert('Access denied! Admin login required.');
+      showError('Access denied! Admin login required.');
       navigate('/login');
       return;
     }
     loadTurfs();
-  }, [navigate]);
+  }, [navigate, showError]);
 
   async function loadTurfs() {
     setLoading(true);
@@ -70,7 +72,7 @@ const AdminDashboard = () => {
       setPendingTurfs(pendingRes.data);
       setApprovedTurfs(approvedRes.data);
     } catch (err) {
-      alert('Failed to load turf data.');
+      showError('Failed to load turf data.');
     } finally {
       setLoading(false);
     }
@@ -79,10 +81,10 @@ const AdminDashboard = () => {
   async function handleApprove(turfId) {
     try {
       await api.put(`/admin/approve/${turfId}`);
-      alert('✅ Turf approved and is now live on the site.');
+      showSuccess('✅ Turf approved and is now live on the site.');
       loadTurfs();
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to approve turf.'));
+      showError(getApiErrorMessage(err, 'Failed to approve turf.'));
     }
   }
 
@@ -96,10 +98,10 @@ const AdminDashboard = () => {
 
     try {
       await api.put(`/admin/reject/${turfId}`);
-      alert('Turf has been rejected.');
+      showInfo('Turf has been rejected.');
       loadTurfs();
     } catch (err) {
-      alert(getApiErrorMessage(err, 'Failed to reject turf.'));
+      showError(getApiErrorMessage(err, 'Failed to reject turf.'));
     }
   }
 

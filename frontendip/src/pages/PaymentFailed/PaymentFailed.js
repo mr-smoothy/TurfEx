@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getMyBookings } from '../../services/bookingService';
+import { useNotification } from '../../context/NotificationContext';
 import './PaymentResult.css';
 
 const PaymentFailed = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { showError, showInfo } = useNotification();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -15,6 +17,7 @@ const PaymentFailed = () => {
     async function loadBookingStatus() {
       setLoading(true);
       try {
+        showInfo('Payment was not completed. Your booking remains pending.');
         const bookingIdFromQuery = searchParams.get('bookingId');
         const pendingBookingId = localStorage.getItem('pendingPaymentBookingId');
         const bookingId = Number(bookingIdFromQuery || pendingBookingId);
@@ -31,6 +34,8 @@ const PaymentFailed = () => {
         if (isMounted && matchedBooking) {
           setBooking(matchedBooking);
         }
+      } catch (error) {
+        showError('Failed to check booking status after payment cancellation.');
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -43,7 +48,7 @@ const PaymentFailed = () => {
     return function() {
       isMounted = false;
     };
-  }, [searchParams]);
+  }, [searchParams, showError, showInfo]);
 
   function formatStatus(value) {
     if (!value) {

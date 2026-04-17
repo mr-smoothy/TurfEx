@@ -5,10 +5,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { login, logout } from '../../services/authService';
+import { useNotification } from '../../context/NotificationContext';
 import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
+  const { showError, showSuccess } = useNotification();
   
   const [loginMode, setLoginMode] = useState('user');
   const [email, setEmail] = useState('');
@@ -50,6 +52,7 @@ const Login = () => {
     
     if (!email || !password) {
       setError('Please fill in all fields');
+      showError('Please fill in all fields');
       return;
     }
 
@@ -60,6 +63,7 @@ const Login = () => {
 
       if (loginMode === 'user' && role === 'admin') {
         setError('Please use Admin Login for admin accounts.');
+        showError('Please use Admin Login for admin accounts.');
         // Keep app state clean when login happens from the wrong tab.
         logout();
         setLoading(false);
@@ -68,6 +72,7 @@ const Login = () => {
 
       if (loginMode === 'admin' && role !== 'admin') {
         setError('Access denied. This account does not have admin privileges.');
+        showError('Access denied. This account does not have admin privileges.');
         // Keep app state clean when login happens from the wrong tab.
         logout();
         setLoading(false);
@@ -75,13 +80,16 @@ const Login = () => {
       }
 
       if (role === 'admin') {
+        showSuccess('Admin login successful.');
         navigate('/admin');
       } else {
+        showSuccess('Login successful.');
         navigate('/turfs');
       }
     } catch (err) {
       const msg = getLoginErrorMessage(err);
       setError(msg);
+      showError(msg);
     } finally {
       setLoading(false);
     }

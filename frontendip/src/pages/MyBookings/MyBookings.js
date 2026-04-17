@@ -6,14 +6,18 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyBookings, cancelBooking } from '../../services/bookingService';
 import { createPaymentSession } from '../../services/paymentService';
+import { useNotification } from '../../context/NotificationContext';
+import ConfirmModal from '../../components/ConfirmModal/ConfirmModal';
 import './MyBookings.css';
 
 const MyBookings = () => {
   const navigate = useNavigate();
+  const { showError, showInfo, showSuccess } = useNotification();
 
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [payingBookingId, setPayingBookingId] = useState(null);
+  const [cancelBookingId, setCancelBookingId] = useState(null);
 
   function getErrorMessage(err, fallback) {
     if (err && err.response && err.response.data && err.response.data.message) {
@@ -76,7 +80,7 @@ const MyBookings = () => {
   useEffect(function() {
     const userRole = localStorage.getItem('userRole');
     if (!localStorage.getItem('isLoggedIn')) {
-      alert('Please login first');
+      showInfo('Please login first');
       navigate('/login');
       return;
     }
@@ -85,7 +89,7 @@ const MyBookings = () => {
       return;
     }
     loadUserBookings();
-  }, [navigate]);
+  }, [navigate, showInfo]);
 
   async function loadUserBookings() {
     setLoading(true);
@@ -93,21 +97,38 @@ const MyBookings = () => {
       const data = await getMyBookings();
       setBookings(data);
     } catch (err) {
-      alert('Failed to load bookings.');
+      showError('Failed to load bookings.');
     } finally {
       setLoading(false);
     }
   }
 
   async function handleCancel(bookingId) {
-    if (!window.confirm('Are you sure you want to cancel this booking?')) return;
     try {
       await cancelBooking(bookingId);
-      alert('Booking cancelled successfully!');
+      showSuccess('Booking cancelled successfully!');
       loadUserBookings();
     } catch (err) {
-      alert(getErrorMessage(err, 'Failed to cancel booking.'));
+      showError(getErrorMessage(err, 'Failed to cancel booking.'));
     }
+  }
+
+  function handleOpenCancelModal(bookingId) {
+    setCancelBookingId(bookingId);
+  }
+
+  function handleCloseCancelModal() {
+    setCancelBookingId(null);
+  }
+
+  async function handleConfirmCancel() {
+    if (!cancelBookingId) {
+      return;
+    }
+
+    const bookingId = cancelBookingId;
+    setCancelBookingId(null);
+    await handleCancel(bookingId);
   }
 
   async function handlePayNow(booking) {
@@ -122,7 +143,7 @@ const MyBookings = () => {
       window.location.href = session.url;
     } catch (err) {
       localStorage.removeItem('pendingPaymentBookingId');
-      alert(getErrorMessage(err, 'Failed to start payment. Please try again.'));
+      showError(getErrorMessage(err, 'Failed to start payment. Please try again.'));
     } finally {
       setPayingBookingId(null);
     }
@@ -223,7 +244,7 @@ const MyBookings = () => {
                     </button>
                   )}
                   <button
-                    onClick={function() { handleCancel(booking.id); }}
+                    onClick={function() { handleOpenCancelModal(booking.id); }}
                     className="btn btn-cancel"
                   >
                     Cancel Booking
@@ -247,6 +268,13 @@ const MyBookings = () => {
         </div>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={cancelBookingId !== null}
+        message="Are you sure you want to cancel this booking?"
+        onConfirm={handleConfirmCancel}
+        onCancel={handleCloseCancelModal}
+      />
     </div>
   );
 };

@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getMyBookings } from '../../services/bookingService';
 import api from '../../services/api';
+import { useNotification } from '../../context/NotificationContext';
 import './PaymentResult.css';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { showError, showSuccess } = useNotification();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [confirmationError, setConfirmationError] = useState(null);
@@ -29,6 +31,7 @@ const PaymentSuccess = () => {
         if (!sessionId) {
           console.error('PaymentSuccess: session_id is missing from URL');
           setConfirmationError('Payment session ID is missing. Please contact support.');
+          showError('Payment session ID is missing. Please contact support.');
           setLoading(false);
           return;
         }
@@ -43,6 +46,7 @@ const PaymentSuccess = () => {
         setPaidAmount(response.data && response.data.amount != null ? Number(response.data.amount) : null);
         console.log('PaymentSuccess: Backend confirmation successful');
         setConfirmationSuccess(true);
+        showSuccess('Payment successful and confirmed.');
 
         // Step 2: Load booking from localStorage or fetch all bookings
         const pendingBookingId = localStorage.getItem('pendingPaymentBookingId');
@@ -51,6 +55,7 @@ const PaymentSuccess = () => {
         if (!pendingBookingId) {
           console.error('PaymentSuccess: pendingPaymentBookingId not found in localStorage');
           setConfirmationError('Could not identify booking. Please check your bookings.');
+          showError('Could not identify booking. Please check your bookings.');
           setLoading(false);
           return;
         }
@@ -86,6 +91,7 @@ const PaymentSuccess = () => {
           } else {
             console.error('PaymentSuccess: Booking not found in bookings list');
             setConfirmationError('Could not load booking details.');
+            showError('Could not load booking details.');
           }
           setLoading(false);
         }
@@ -94,6 +100,7 @@ const PaymentSuccess = () => {
         if (isMounted) {
           const errorMsg = error.response?.data?.message || error.message || 'An error occurred while confirming your payment.';
           setConfirmationError(errorMsg);
+          showError(errorMsg);
           setLoading(false);
         }
       }
@@ -104,7 +111,7 @@ const PaymentSuccess = () => {
     return function() {
       isMounted = false;
     };
-  }, [searchParams]);
+  }, [searchParams, showError, showSuccess]);
 
   function formatStatus(value) {
     if (!value) {

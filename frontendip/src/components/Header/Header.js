@@ -5,6 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { logout } from '../../services/authService';
+import { useNotification } from '../../context/NotificationContext';
 import ChatBot from '../ChatBot/ChatBot';
 import './Header.css';
 
@@ -18,6 +19,7 @@ const Header = () => {
   const [chatOpen, setChatOpen] = useState(false); // Chatbot state
   const location = useLocation();
   const navigate = useNavigate();
+  const { showSuccess } = useNotification();
 
   // Check login status when page loads or location changes
   useEffect(function() {
@@ -55,7 +57,7 @@ const Header = () => {
     setUserName('');
     setUserEmail('');
     setUserRole('');
-    alert('Logged out successfully! 👋');
+    showSuccess('Logged out successfully! 👋');
     navigate('/');
   }
 

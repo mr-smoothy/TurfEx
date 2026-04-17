@@ -5,10 +5,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { submitTurf } from '../../services/turfService';
+import { useNotification } from '../../context/NotificationContext';
 import './AddTurf.css';
 
 const AddTurf = () => {
   const navigate = useNavigate();
+  const { showError, showInfo, showSuccess } = useNotification();
   
   // State variables for form fields
   const [name, setName] = useState('');  // Turf name
@@ -36,17 +38,17 @@ const AddTurf = () => {
     const userRole = localStorage.getItem('userRole');
     
     if (!userEmail || !isLoggedIn) {
-      alert('Please login first to add a turf');
+      showInfo('Please login first to add a turf');
       navigate('/login');
       return;
     }
     
     if (userRole === 'admin') {
-      alert('Admins cannot add turfs. This is a user feature.');
+      showError('Admins cannot add turfs. This is a user feature.');
       navigate('/admin');
       return;
     }
-  }, [navigate]);
+  }, [navigate, showError, showInfo]);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -70,7 +72,7 @@ const AddTurf = () => {
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude)
       });
-      alert('Turf submitted! Your turf is waiting for admin approval.');
+      showSuccess('Turf submitted! Your turf is waiting for admin approval.');
       navigate('/my-turfs');
     } catch (err) {
       setError(getSubmitErrorMessage(err));
@@ -131,7 +133,7 @@ const AddTurf = () => {
 
   function handleUseCurrentCoordinates() {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported on this device. Please enter the coordinates manually.');
+      showInfo('Geolocation is not supported on this device. Please enter the coordinates manually.');
       return;
     }
 
@@ -139,7 +141,7 @@ const AddTurf = () => {
       setLatitude(position.coords.latitude.toFixed(6));
       setLongitude(position.coords.longitude.toFixed(6));
     }, function() {
-      alert('Unable to access your current location. Please try again or type the coordinates manually.');
+      showError('Unable to access your current location. Please try again or type the coordinates manually.');
     });
   }
 
