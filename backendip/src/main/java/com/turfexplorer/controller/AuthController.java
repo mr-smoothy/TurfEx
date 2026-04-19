@@ -13,10 +13,14 @@ import com.turfexplorer.service.AuthService;
 import com.turfexplorer.service.AuthRateLimiterService;
 import com.turfexplorer.service.PasswordResetService;
 import jakarta.validation.Valid;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -32,8 +36,8 @@ public class AuthController {
     private AuthRateLimiterService authRateLimiterService;
 
     @PostMapping("/register")
-    public ResponseEntity<MessageResponse> register(@Valid @RequestBody RegisterRequest request, HttpServletRequest httpRequest) {
-        authRateLimiterService.assertRegisterAllowed(resolveClientId(httpRequest), request.getEmail());
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
+        authRateLimiterService.assertRegisterAllowed(resolveClientId(), request.getEmail());
         return ResponseEntity.ok(authService.register(request));
     }
 
@@ -74,6 +78,15 @@ public class AuthController {
     @PostMapping("/resend-reset-otp")
     public ResponseEntity<MessageResponse> resendResetOtp(@Valid @RequestBody ForgotPasswordRequest request) {
         return ResponseEntity.ok(passwordResetService.resendResetOtp(request.getEmail()));
+    }
+
+    private String resolveClientId() {
+        RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+        if (requestAttributes instanceof ServletRequestAttributes servletRequestAttributes) {
+            return resolveClientId(servletRequestAttributes.getRequest());
+        }
+
+        return "unknown";
     }
 
     private String resolveClientId(HttpServletRequest request) {

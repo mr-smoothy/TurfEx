@@ -40,6 +40,11 @@ const ResetPassword = () => {
       return;
     }
 
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await resetPassword(email, newPassword);

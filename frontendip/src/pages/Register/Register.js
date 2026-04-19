@@ -22,7 +22,29 @@ const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function getRegisterErrorMessage() {
+  function getRegisterErrorMessage(err) {
+    const responseData = err && err.response ? err.response.data : null;
+
+    if (responseData && typeof responseData === 'object') {
+      if (responseData.message && String(responseData.message).trim()) {
+        return String(responseData.message);
+      }
+
+      // Validation errors from backend come as a field-message map.
+      const validationMessages = Object.values(responseData)
+        .filter((value) => typeof value === 'string' && value.trim().length > 0);
+      if (validationMessages.length > 0) {
+        return validationMessages[0];
+      }
+    }
+
+    if (err && err.message && String(err.message).trim()) {
+      if (String(err.message).trim() === 'Network Error') {
+        return 'We are having trouble connecting right now. Please try again.';
+      }
+      return String(err.message);
+    }
+
     return 'Registration failed. Please try again.';
   }
 
@@ -40,6 +62,12 @@ const Register = () => {
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
       showError('Passwords do not match.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      showError('Password must be at least 6 characters.');
       return;
     }
 
