@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/Turf_Explorer/static/css/main.4bef03e7.css",
+    "main.js": "/Turf_Explorer/static/js/main.26f18f9b.js",
+    "index.html": "/Turf_Explorer/index.html",
+    "main.4bef03e7.css.map": "/Turf_Explorer/static/css/main.4bef03e7.css.map",
+    "main.26f18f9b.js.map": "/Turf_Explorer/static/js/main.26f18f9b.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.4bef03e7.css",
+    "static/js/main.26f18f9b.js"
+  ]
+}
